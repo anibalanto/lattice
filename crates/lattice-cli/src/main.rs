@@ -1,7 +1,8 @@
 use std::path::{Path, PathBuf};
 use clap::{Parser, Subcommand};
 
-use lattice::model::Guarantee;
+use lattice::graph::{Direction, Graph, TraverseOpts};
+use lattice::model::{Guarantee, NodeId};
 use lattice::provider::{Availability, BilinkProvider, Registry};
 
 #[derive(Parser)]
@@ -18,6 +19,18 @@ enum Command {
         /// Archivo, posición archivo:línea:col, UUID, o `.` para la capa actual
         #[arg(default_value = ".")]
         selector: String,
+        /// Sigue las aristas dirigidas hacia los llamadores
+        #[arg(long, conflicts_with_all = ["down", "both"])]
+        up: bool,
+        /// Sigue las aristas dirigidas hacia los llamados
+        #[arg(long, conflicts_with = "both")]
+        down: bool,
+        /// Ambos sentidos (default)
+        #[arg(long)]
+        both: bool,
+        /// Profundidad máxima del traversal
+        #[arg(long)]
+        depth: Option<usize>,
         /// Tipos de arista habilitados: bilink,governs,task,call,doclink,external
         #[arg(long)]
         via: Option<String>,
@@ -56,9 +69,13 @@ fn main() -> anyhow::Result<()> {
     let cwd = std::env::current_dir()?;
 
     match cli.command {
-        Command::Graph { selector, via, guarantee, state, format } =>
-            cmd_graph(&cwd, &selector, via.as_deref(), guarantee.as_deref(),
-                      state.as_deref(), &format),
+        Command::Graph { selector, up, down, both, depth, via, guarantee, state, format } => {
+            let direction = if up { Direction::Up }
+                       else if down { Direction::Down }
+                       else { let _ = both; Direction::Both };
+            cmd_graph(&cwd, &selector, direction, depth, via.as_deref(),
+                      guarantee.as_deref(), state.as_deref(), &format)
+        }
 
         Command::Daemon { sub } => match sub {
             DaemonCommand::Start { workspace } => daemon_start(&workspace.unwrap_or(cwd)),
@@ -70,8 +87,57 @@ fn main() -> anyhow::Result<()> {
 
 // ─── graph ────────────────────────────────────────────────────────────────────
 
+/// Nodos de partida del traversal, según la forma del selector.
+///
+/// `.` y `*` no arrancan un traversal: piden el grafo entero de la capa.
+fn resolve_selector(g: &Graph, cwd: &Path, selector: &str) -> Option<Vec<NodeId>> {
+    if selector == "." || selector == "*" { return None; }
+
+    // archivo:línea:col → nodos que cubren esa posición
+    let parts: Vec<&str> = selector.rsplitn(3, ':').collect();
+    if parts.len() == 3 {
+        if let (Ok(col), Ok(line)) = (parts[0].parse::<usize>(), parts[1].parse::<usize>()) {
+            let file = parts[2];
+            if let Ok(source) = std::fs::read_to_string(cwd.join(file)) {
+                let pos = line_col_to_byte(&source, line, col);
+                for layer in [".", ""] {
+                    let hits = g.covering(layer, file, pos);
+                    if !hits.is_empty() {
+                        return Some(hits.into_iter().cloned().collect());
+                    }
+                }
+            }
+            // Sin nodos que la cubran, el selector no resuelve.
+            return Some(vec![]);
+        }
+    }
+
+    // UUID de un vínculo → los dos extremos de esa arista
+    let by_ref: Vec<NodeId> = g.edges.iter()
+        .filter(|e| e.r#ref.starts_with(selector))
+        .flat_map(|e| [e.from.clone(), e.to.clone()])
+        .collect();
+    if !by_ref.is_empty() { return Some(by_ref); }
+
+    // archivo → todos los nodos de ese archivo
+    Some(g.nodes().into_iter()
+        .filter(|n| n.as_fragment().is_some_and(|(_, p, _)| p == selector || p.ends_with(selector)))
+        .cloned().collect())
+}
+
+fn line_col_to_byte(source: &str, line: usize, col: usize) -> usize {
+    let mut cur = 1;
+    for (i, c) in source.char_indices() {
+        if cur == line { return i + (col - 1).min(source.len() - i); }
+        if c == '\n' { cur += 1; }
+    }
+    source.len()
+}
+
+#[allow(clippy::too_many_arguments)]
 fn cmd_graph(
     cwd: &Path, selector: &str,
+    direction: Direction, depth: Option<usize>,
     via: Option<&str>, guarantee: Option<&str>, state: Option<&str>,
     format: &str,
 ) -> anyhow::Result<()> {
@@ -98,10 +164,19 @@ fn cmd_graph(
             },
         });
     }
-    if selector != "." && selector != "*" {
-        edges.retain(|e| e.from.0.contains(selector) || e.to.0.contains(selector)
-                      || e.r#ref.starts_with(selector));
-    }
+    // El traversal va después de los filtros: `--via` y `--guarantee` definen
+    // por qué aristas se puede caminar, no solo cuáles se muestran.
+    let graph = Graph::new(edges, status);
+    let mut edges = match resolve_selector(&graph, cwd, selector) {
+        None => graph.edges.clone(),
+        Some(starts) => {
+            let opts = TraverseOpts { direction, depth, stop_at_accepted: true };
+            graph.traverse(&starts, &opts).into_iter()
+                .map(|i| graph.edges[i].clone()).collect()
+        }
+    };
+    edges.sort_by(|a, b| a.from.cmp(&b.from).then(a.to.cmp(&b.to)));
+    let status = &graph.providers;
 
     let degraded = status.iter().any(|s| !s.status.is_available());
 
@@ -136,7 +211,7 @@ fn cmd_graph(
         }
     }
 
-    for s in &status {
+    for s in status {
         if let Availability::Unavailable { reason } = &s.status {
             eprintln!("warn: proveedor {} no disponible ({reason})", s.name);
         }
