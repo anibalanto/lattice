@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "crates/lattice",
+    "crates/lattice-daemon",
+]
+resolver = "2"
