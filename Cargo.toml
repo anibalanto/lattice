@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/lattice",
+    "crates/lattice-cli",
     "crates/lattice-daemon",
 ]
 resolver = "2"

@@ -5,3 +5,5 @@
 //! especificados en `subsystems/lattice/` y todavía no implementados.
 
 pub mod daemon_client;
+pub mod model;
+pub mod provider;

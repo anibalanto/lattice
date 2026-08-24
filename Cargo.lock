@@ -386,6 +386,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lattice-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "lattice",
+ "serde_json",
+]
+
+[[package]]
 name = "lattice-daemon"
 version = "0.1.0"
 dependencies = [
