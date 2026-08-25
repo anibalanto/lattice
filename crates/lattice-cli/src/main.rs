@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 use clap::{Parser, Subcommand};
 
+mod html;
+mod render;
+
 use lattice::graph::{Direction, Graph, TraverseOpts};
 use lattice::model::{Guarantee, NodeId};
 use lattice::provider::{Availability, BilinkProvider, LspProvider, Registry};
@@ -209,32 +212,14 @@ fn cmd_graph(
     let degraded = status.iter().any(|s| !s.status.is_available());
 
     match format {
-        "json" => {
-            let providers: Vec<serde_json::Value> = status.iter().map(|s| match &s.status {
-                Availability::Available => serde_json::json!({"name": s.name, "status": "available"}),
-                Availability::Unavailable { reason } =>
-                    serde_json::json!({"name": s.name, "status": "unavailable", "reason": reason}),
-            }).collect();
-            println!("{}", serde_json::to_string_pretty(&serde_json::json!({
-                "providers": providers,
-                "edges": edges,
-            }))?);
-        }
-        _ => {
-            let names: Vec<String> = status.iter().map(|s| match &s.status {
-                Availability::Available => format!("{} OK", s.name),
-                Availability::Unavailable { .. } => format!("{} no disponible", s.name),
-            }).collect();
-            eprintln!("proveedores: {}\n", names.join(" · "));
-
-            for e in &edges {
-                let st = e.state.as_ref()
-                    .map(|[a, b]| format!("  [{a} ↔ {b}]")).unwrap_or_default();
-                println!("{}…  {} ({}){st}",
-                    &e.r#ref[..8.min(e.r#ref.len())], e.kind, e.guarantee);
-                println!("  {}", e.from);
-                println!("  {}", e.to);
-            }
+        "json" => render::json(&edges, status)?,
+        "flat" => render::flat(&edges),
+        "dot"  => render::dot(&edges),
+        "html" => print!("{}", html::render(&lattice::provider::outermost_root(cwd), &edges)),
+        _      => {
+            eprintln!("{}
+", render::providers_line(status));
+            render::tree(&edges);
             if edges.is_empty() { eprintln!("(sin aristas)"); }
         }
     }
