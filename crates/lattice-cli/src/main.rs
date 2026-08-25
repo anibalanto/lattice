@@ -34,6 +34,9 @@ enum Command {
         /// Profundidad máxima del traversal
         #[arg(long)]
         depth: Option<usize>,
+        /// Recolectar también desde las capas descendientes
+        #[arg(long)]
+        recursive: bool,
         /// Tipos de arista habilitados: bilink,governs,task,call,doclink,external
         #[arg(long)]
         via: Option<String>,
@@ -72,11 +75,11 @@ fn main() -> anyhow::Result<()> {
     let cwd = std::env::current_dir()?;
 
     match cli.command {
-        Command::Graph { selector, up, down, both, depth, via, guarantee, state, format } => {
+        Command::Graph { selector, up, down, both, depth, recursive, via, guarantee, state, format } => {
             let direction = if up { Direction::Up }
                        else if down { Direction::Down }
                        else { let _ = both; Direction::Both };
-            cmd_graph(&cwd, &selector, direction, depth, via.as_deref(),
+            cmd_graph(&cwd, &selector, direction, depth, recursive, via.as_deref(),
                       guarantee.as_deref(), state.as_deref(), &format)
         }
 
@@ -152,12 +155,12 @@ fn line_col_to_byte(source: &str, line: usize, col: usize) -> usize {
 #[allow(clippy::too_many_arguments)]
 fn cmd_graph(
     cwd: &Path, selector: &str,
-    direction: Direction, depth: Option<usize>,
+    direction: Direction, depth: Option<usize>, recursive: bool,
     via: Option<&str>, guarantee: Option<&str>, state: Option<&str>,
     format: &str,
 ) -> anyhow::Result<()> {
     let registry = Registry::new()
-        .register(Box::new(BilinkProvider::default()))
+        .register(Box::new(BilinkProvider::default().recursive(recursive)))
         .register(Box::new(LspProvider));
     let (mut edges, status) = registry.collect(cwd);
 

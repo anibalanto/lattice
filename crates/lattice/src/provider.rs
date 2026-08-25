@@ -55,10 +55,20 @@ pub trait Provider {
 /// una cadena es conocimiento de su formato.
 pub struct BilinkProvider {
     pub binary: String,
+    /// Recolectar también de las capas descendientes.
+    ///
+    /// Se delega en bilinker en vez de que lattice recorra `.stratum/`: dónde
+    /// vive una capa es conocimiento de Stratum y del formato bilink, no del
+    /// grafo agregado.
+    pub recursive: bool,
 }
 
 impl Default for BilinkProvider {
-    fn default() -> Self { Self { binary: "bilinker".into() } }
+    fn default() -> Self { Self { binary: "bilinker".into(), recursive: false } }
+}
+
+impl BilinkProvider {
+    pub fn recursive(mut self, yes: bool) -> Self { self.recursive = yes; self }
 }
 
 impl Provider for BilinkProvider {
@@ -83,8 +93,10 @@ impl Provider for BilinkProvider {
     }
 
     fn edges(&self, scope: &Path) -> Result<Vec<Edge>> {
+        let mut args = vec!["graph", ".", "--format", "json"];
+        if self.recursive { args.push("--recursive"); }
         let out = std::process::Command::new(&self.binary)
-            .args(["graph", ".", "--format", "json"])
+            .args(&args)
             .current_dir(scope)
             .output()?;
         if !out.status.success() {
