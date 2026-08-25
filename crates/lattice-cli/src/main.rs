@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 
 use lattice::graph::{Direction, Graph, TraverseOpts};
 use lattice::model::{Guarantee, NodeId};
-use lattice::provider::{Availability, BilinkProvider, Registry};
+use lattice::provider::{Availability, BilinkProvider, LspProvider, Registry};
 
 #[derive(Parser)]
 #[command(name = "lattice", about = "El grafo agregado de las conexiones del proyecto")]
@@ -100,12 +100,24 @@ fn resolve_selector(g: &Graph, cwd: &Path, selector: &str) -> Option<Vec<NodeId>
             let file = parts[2];
             if let Ok(source) = std::fs::read_to_string(cwd.join(file)) {
                 let pos = line_col_to_byte(&source, line, col);
-                for layer in [".", ""] {
-                    let hits = g.covering(layer, file, pos);
-                    if !hits.is_empty() {
-                        return Some(hits.into_iter().cloned().collect());
-                    }
-                }
+                // La capa del nodo es la de cwd relativa a la raíz más externa:
+                // los nodos se nombran contra esa raíz, no contra el directorio
+                // desde el que se invoca.
+                let base  = lattice::provider::outermost_root(cwd);
+                let rel   = cwd.strip_prefix(&base).ok()
+                    .map(|p| p.display().to_string()).unwrap_or_default();
+                let layer = if rel.is_empty() { ".".to_string() } else { rel };
+
+                // El nodo de la posición misma, además de los que la cubren.
+                //
+                // El LSP razona sobre posiciones, no sobre los rangos que
+                // declaró bilinker: preguntarle por el byte 0 de un archivo
+                // entero no significa nada. Este nodo sintético es su punto de
+                // entrada, y la contención lo conecta con lo que haya declarado
+                // encima.
+                let mut starts = vec![NodeId(format!("{layer}::{file}#{pos}~{pos}"))];
+                starts.extend(g.covering(&layer, file, pos).into_iter().cloned());
+                return Some(starts);
             }
             // Sin nodos que la cubran, el selector no resuelve.
             return Some(vec![]);
@@ -141,7 +153,9 @@ fn cmd_graph(
     via: Option<&str>, guarantee: Option<&str>, state: Option<&str>,
     format: &str,
 ) -> anyhow::Result<()> {
-    let registry = Registry::new().register(Box::new(BilinkProvider::default()));
+    let registry = Registry::new()
+        .register(Box::new(BilinkProvider::default()))
+        .register(Box::new(LspProvider));
     let (mut edges, status) = registry.collect(cwd);
 
     // Los filtros se aplican después de componer, no antes: el estado de los
@@ -166,13 +180,27 @@ fn cmd_graph(
     }
     // El traversal va después de los filtros: `--via` y `--guarantee` definen
     // por qué aristas se puede caminar, no solo cuáles se muestran.
-    let graph = Graph::new(edges, status);
-    let mut edges = match resolve_selector(&graph, cwd, selector) {
-        None => graph.edges.clone(),
+    let graph  = Graph::new(edges, status);
+    let starts = resolve_selector(&graph, cwd, selector);
+
+    let (graph, mut edges) = match starts {
+        // `.` y `*` no recorren: piden el grafo entero de la capa.
+        None => { let all = graph.edges.clone(); (graph, all) }
         Some(starts) => {
+            // Los proveedores que expanden bajo demanda —el LSP— aportan sus
+            // aristas antes de recorrer: si no, el traversal solo vería lo que
+            // los que enumeran ya habían puesto.
+            let extra: Vec<_> = starts.iter()
+                .flat_map(|n| registry.expand(cwd, n)).collect();
+            let graph = if extra.is_empty() { graph } else {
+                let mut all = graph.edges.clone();
+                all.extend(extra);
+                Graph::new(lattice::provider::dedup(all), graph.providers)
+            };
             let opts = TraverseOpts { direction, depth, stop_at_accepted: true };
-            graph.traverse(&starts, &opts).into_iter()
-                .map(|i| graph.edges[i].clone()).collect()
+            let reached = graph.traverse(&starts, &opts).into_iter()
+                .map(|i| graph.edges[i].clone()).collect();
+            (graph, reached)
         }
     };
     edges.sort_by(|a, b| a.from.cmp(&b.from).then(a.to.cmp(&b.to)));
