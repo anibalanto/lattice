@@ -399,9 +399,14 @@ impl DocProvider {
                 let mut i = 0usize;
                 while i < b.len() {
                     if b[i] == b'(' && i > 0 && b[i - 1] == b']' {
+                        // `![alt](x.png)` es un embed, no una referencia a otro
+                        // documento. Emitirlo como doclink mezclaría assets con
+                        // referencias en la misma consulta.
+                        let is_image = line[..i].rfind('[')
+                            .is_some_and(|open| open > 0 && b[open - 1] == b'!');
                         if let Some(close) = line[i..].find(')') {
                             let target = line[i + 1..i + close].trim();
-                            if !target.is_empty() && !target.starts_with('#') {
+                            if !is_image && !target.is_empty() && !target.starts_with('#') {
                                 out.push((target.to_string(), pos + i));
                             }
                             i += close;
@@ -652,6 +657,13 @@ mod doc_tests {
         let md = "real [a](a.md)\n```\nejemplo [b](b.md)\n```\notro [c](c.md)\n";
         let links: Vec<String> = DocProvider::links(md).into_iter().map(|(t, _)| t).collect();
         assert_eq!(links, vec!["a.md", "c.md"], "un ejemplo no es una referencia");
+    }
+
+    #[test]
+    fn skips_images() {
+        let md = "un [link](a.md) y una imagen ![alt](foto.png)";
+        let links: Vec<String> = DocProvider::links(md).into_iter().map(|(t, _)| t).collect();
+        assert_eq!(links, vec!["a.md"], "una imagen es un embed, no una referencia");
     }
 
     #[test]
