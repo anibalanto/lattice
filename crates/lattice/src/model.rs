@@ -79,9 +79,17 @@ impl NodeId {
     /// cruzar de una garantía a otra: preguntar si hay un endpoint aceptado que
     /// cubre la función que el LSP acaba de señalar.
     pub fn contains(&self, other: &NodeId) -> bool {
-        let (Some((l1, p1, Some((s1, e1)))), Some((l2, p2, Some((s2, e2))))) =
+        let (Some((l1, p1, r1)), Some((l2, p2, _))) =
             (self.as_fragment(), other.as_fragment()) else { return false };
-        l1 == l2 && p1 == p2 && s1 <= s2 && e2 <= e1
+        if l1 != l2 || p1 != p2 { return false; }
+        match (r1, other.as_fragment().and_then(|(_, _, r)| r)) {
+            // Un nodo de archivo completo contiene a todo fragmento de ese archivo.
+            // Es lo que permite que un link markdown —que apunta al archivo—
+            // alcance los bilinks declarados sobre sus fragmentos.
+            (None, _) => self != other,
+            (Some(_), None) => false,
+            (Some((s1, e1)), Some((s2, e2))) => s1 <= s2 && e2 <= e1,
+        }
     }
 
     /// ¿El rango de este nodo cubre `pos` (byte absoluto en `path` de `layer`)?
@@ -122,12 +130,23 @@ pub struct Edge {
     /// Commit en que se aceptó cada extremo. Baseline de `git log <commit>..HEAD`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub commit: Option<[String; 2]>,
+    /// El destino no se pudo resolver.
+    ///
+    /// No usa `state`, que es el estado que reporta el dueño de una arista
+    /// `accepted`. Un link muerto en un documento es información —una arista que
+    /// existe y apunta a la nada— y no un estado de aceptación.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub broken: bool,
 }
 
 impl Edge {
     /// Clave de deduplicación: dos proveedores pueden emitir la misma conexión.
+    ///
+    /// Los extremos se ordenan **solo si la arista no es dirigida**. En una
+    /// dirigida el sentido es parte del hecho: dos documentos que se referencian
+    /// mutuamente son dos links, no uno, y `a llama a b` no es `b llama a a`.
     pub fn dedup_key(&self) -> (String, String, String) {
-        let (a, b) = if self.from <= self.to {
+        let (a, b) = if self.directed || self.from <= self.to {
             (self.from.0.clone(), self.to.0.clone())
         } else {
             (self.to.0.clone(), self.from.0.clone())
@@ -167,6 +186,15 @@ mod tests {
     }
 
     #[test]
+    fn whole_file_contains_its_fragments() {
+        let file = n(".::a.rs");
+        assert!(file.contains(&n(".::a.rs#10~50")));
+        assert!(!file.contains(&n(".::b.rs#10~50")), "otro archivo");
+        assert!(!file.contains(&file), "no se contiene a sí mismo");
+        assert!(!n(".::a.rs#10~50").contains(&file), "un fragmento no contiene al archivo");
+    }
+
+    #[test]
     fn containment_requires_same_layer_and_file() {
         let outer = n(".::a.rs#0~100");
         assert!(outer.contains(&n(".::a.rs#10~50")));
@@ -185,11 +213,23 @@ mod tests {
     }
 
     #[test]
+    fn directed_edges_keep_their_direction_when_deduping() {
+        let mk = |a: &str, b: &str| Edge {
+            from: n(a), to: n(b), kind: "doclink".into(),
+            guarantee: Guarantee::Asserted, provider: "doc".into(),
+            directed: true, r#ref: "x".into(), state: None, commit: None, broken: false,
+        };
+        assert_ne!(mk(".::a.md", ".::b.md").dedup_key(),
+                   mk(".::b.md", ".::a.md").dedup_key(),
+                   "dos documentos que se referencian mutuamente son dos links");
+    }
+
+    #[test]
     fn dedup_key_is_order_independent() {
         let mk = |a: &str, b: &str| Edge {
             from: n(a), to: n(b), kind: "bilink".into(),
             guarantee: Guarantee::Accepted, provider: "bilinker".into(),
-            directed: false, r#ref: "x".into(), state: None, commit: None,
+            directed: false, r#ref: "x".into(), state: None, commit: None, broken: false,
         };
         assert_eq!(mk(".::a#0~1", ".::b#0~1").dedup_key(),
                    mk(".::b#0~1", ".::a#0~1").dedup_key());

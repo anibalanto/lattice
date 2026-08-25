@@ -201,7 +201,7 @@ impl LspProvider {
                 provider: "lsp".into(),
                 directed: true,
                 r#ref: c.name,
-                state: None, commit: None,
+                state: None, commit: None, broken: false,
             })
         }).collect())
     }
@@ -368,6 +368,141 @@ mod anchor_tests {
     }
 }
 
+// ─── proveedor markdown ───────────────────────────────────────────────────────
+
+/// Links escritos dentro de documentos markdown.
+///
+/// Es la única fuente de aristas `asserted`: nadie las verificó. Bilinker
+/// conecta specs con código y el LSP conecta código con código; esto conecta
+/// **documentos entre sí**, que hasta ahora no aparecía en el grafo.
+pub struct DocProvider;
+
+impl DocProvider {
+    /// Extrae los links de un markdown: `(texto, destino, byte del link)`.
+    ///
+    /// Se saltean los que están dentro de bloques de código: un ejemplo no es
+    /// una referencia.
+    fn links(source: &str) -> Vec<(String, usize)> {
+        let mut out    = Vec::new();
+        let mut fenced = false;
+        let mut pos    = 0usize;
+
+        for line in source.split_inclusive('\n') {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+                fenced = !fenced;
+                pos += line.len();
+                continue;
+            }
+            if !fenced {
+                let b = line.as_bytes();
+                let mut i = 0usize;
+                while i < b.len() {
+                    if b[i] == b'(' && i > 0 && b[i - 1] == b']' {
+                        if let Some(close) = line[i..].find(')') {
+                            let target = line[i + 1..i + close].trim();
+                            if !target.is_empty() && !target.starts_with('#') {
+                                out.push((target.to_string(), pos + i));
+                            }
+                            i += close;
+                        }
+                    }
+                    i += 1;
+                }
+            }
+            pos += line.len();
+        }
+        out
+    }
+
+    fn is_external(target: &str) -> bool {
+        target.starts_with("http://") || target.starts_with("https://")
+            || target.starts_with("mailto:")
+    }
+
+    /// Markdown de un scope, sin entrar en directorios generados.
+    fn markdown_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+        const SKIP: &[&str] = &["node_modules", "target", ".git", ".bilink", "out"];
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for e in entries.flatten() {
+            let p = e.path();
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if p.is_dir() {
+                if !SKIP.contains(&name) { Self::markdown_files(&p, out); }
+            } else if name.ends_with(".md") {
+                out.push(p);
+            }
+        }
+    }
+}
+
+impl Provider for DocProvider {
+    fn name(&self) -> &str { "doc" }
+
+    fn kinds(&self) -> Vec<(&'static str, Guarantee)> {
+        vec![("doclink", Guarantee::Asserted), ("external", Guarantee::Asserted)]
+    }
+
+    fn available(&self, _scope: &Path) -> Availability { Availability::Available }
+
+    fn edges(&self, scope: &Path) -> Result<Vec<Edge>> {
+        let base = outermost_root(scope);
+        let mut files = Vec::new();
+        Self::markdown_files(scope, &mut files);
+
+        let mut out = Vec::new();
+        for path in files {
+            let Ok(source) = std::fs::read_to_string(&path) else { continue };
+            let Some(from) = whole_file_node(&base, &path) else { continue };
+
+            for (target, _at) in Self::links(&source) {
+                let (to, kind, broken) = if Self::is_external(&target) {
+                    (NodeId(target.clone()), "external", false)
+                } else {
+                    // El ancla no forma parte del destino en el filesystem.
+                    let file_part = target.split('#').next().unwrap_or(&target);
+                    let resolved  = path.parent().unwrap_or(&base).join(file_part);
+                    let exists    = resolved.exists();
+                    let node = whole_file_node(&base, &resolved)
+                        .unwrap_or_else(|| NodeId(format!("?::{file_part}")));
+                    (node, "doclink", !exists)
+                };
+
+                out.push(Edge {
+                    from: from.clone(), to,
+                    kind: kind.into(),
+                    guarantee: Guarantee::Asserted,
+                    provider: "doc".into(),
+                    directed: true,
+                    r#ref: target,
+                    state: None, commit: None,
+                    broken,
+                });
+            }
+        }
+        Ok(out)
+    }
+}
+
+/// Forma canónica de un archivo completo, sin rango.
+fn whole_file_node(base: &Path, file: &Path) -> Option<NodeId> {
+    let abs = file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
+    let rel = abs.strip_prefix(base).ok()?;
+
+    let mut layer = std::path::PathBuf::new();
+    let mut best: Option<(String, String)> = None;
+    let comps: Vec<_> = rel.components().collect();
+    for i in 0..comps.len() {
+        layer.push(comps[i]);
+        if base.join(&layer).join(".bilink").exists() {
+            let inner: std::path::PathBuf = comps[i + 1..].iter().collect();
+            best = Some((layer.display().to_string(), inner.display().to_string()));
+        }
+    }
+    let (layer, inner) = best.unwrap_or_else(|| (".".into(), rel.display().to_string()));
+    Some(NodeId(format!("{layer}::{inner}")))
+}
+
 // ─── registry ─────────────────────────────────────────────────────────────────
 
 /// El estado de un proveedor en una consulta, tal como viaja al resultado.
@@ -459,7 +594,7 @@ mod tests {
         Edge {
             from: NodeId(from.into()), to: NodeId(to.into()), kind: kind.into(),
             guarantee: g, provider: provider.into(), directed: false,
-            r#ref: String::new(), state: None, commit: None,
+            r#ref: String::new(), state: None, commit: None, broken: false,
         }
     }
 
@@ -498,5 +633,55 @@ mod tests {
         assert!(edges.is_empty());
         assert_eq!(status.len(), 1, "un proveedor caído igual aparece en el reporte");
         assert!(!status[0].status.is_available());
+    }
+}
+
+#[cfg(test)]
+mod doc_tests {
+    use super::*;
+
+    #[test]
+    fn extracts_links_and_skips_anchors_only() {
+        let md = "ver [node](node.md) y [otro](../a/b.md#sec), pero no [ancla](#seccion)";
+        let links: Vec<String> = DocProvider::links(md).into_iter().map(|(t, _)| t).collect();
+        assert_eq!(links, vec!["node.md", "../a/b.md#sec"]);
+    }
+
+    #[test]
+    fn ignores_links_inside_code_fences() {
+        let md = "real [a](a.md)\n```\nejemplo [b](b.md)\n```\notro [c](c.md)\n";
+        let links: Vec<String> = DocProvider::links(md).into_iter().map(|(t, _)| t).collect();
+        assert_eq!(links, vec!["a.md", "c.md"], "un ejemplo no es una referencia");
+    }
+
+    #[test]
+    fn recognises_external_targets() {
+        assert!(DocProvider::is_external("https://x.com/a"));
+        assert!(DocProvider::is_external("mailto:a@b"));
+        assert!(!DocProvider::is_external("../a.md"));
+    }
+
+    #[test]
+    fn emits_broken_links_instead_of_dropping_them() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.md"),
+            "[existe](b.md) y [no existe](falta.md)\n").unwrap();
+        std::fs::write(dir.path().join("b.md"), "x").unwrap();
+
+        let edges = DocProvider.edges(dir.path()).unwrap();
+        assert_eq!(edges.len(), 2, "un link muerto es información, no un error");
+
+        let roto = edges.iter().find(|e| e.r#ref == "falta.md").unwrap();
+        assert!(roto.broken);
+        assert!(!edges.iter().find(|e| e.r#ref == "b.md").unwrap().broken);
+    }
+
+    #[test]
+    fn doc_edges_are_asserted_and_directed() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.md"), "[x](b.md)\n").unwrap();
+        let e = &DocProvider.edges(dir.path()).unwrap()[0];
+        assert_eq!(e.guarantee, Guarantee::Asserted);
+        assert!(e.directed, "un link apunta en un sentido");
     }
 }

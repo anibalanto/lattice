@@ -6,7 +6,7 @@ mod render;
 
 use lattice::graph::{Direction, Graph, TraverseOpts};
 use lattice::model::{Guarantee, NodeId};
-use lattice::provider::{Availability, BilinkProvider, LspProvider, Registry};
+use lattice::provider::{Availability, BilinkProvider, DocProvider, LspProvider, Registry};
 
 #[derive(Parser)]
 #[command(name = "lattice", about = "El grafo agregado de las conexiones del proyecto")]
@@ -161,7 +161,8 @@ fn cmd_graph(
 ) -> anyhow::Result<()> {
     let registry = Registry::new()
         .register(Box::new(BilinkProvider::default().recursive(recursive)))
-        .register(Box::new(LspProvider));
+        .register(Box::new(LspProvider))
+        .register(Box::new(DocProvider));
     let (mut edges, status) = registry.collect(cwd);
 
     // Los filtros se aplican después de componer, no antes: el estado de los

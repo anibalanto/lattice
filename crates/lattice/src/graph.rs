@@ -148,7 +148,7 @@ mod tests {
         Edge {
             from: n(from), to: n(to), kind: kind.into(), guarantee: g,
             provider: "t".into(), directed, r#ref: format!("{from}->{to}"),
-            state: None, commit: None,
+            state: None, commit: None, broken: false,
         }
     }
 
