@@ -27,6 +27,7 @@ fn state_tag(e: &Edge) -> String {
 pub fn providers_line(status: &[ProviderStatus]) -> String {
     let parts: Vec<String> = status.iter().map(|s| match &s.status {
         Availability::Available          => format!("{} OK", s.name),
+        Availability::Degraded { .. }    => format!("{} incompleto", s.name),
         Availability::Unavailable { .. } => format!("{} no disponible", s.name),
     }).collect();
     format!("proveedores: {}", parts.join(" · "))
@@ -67,6 +68,8 @@ pub fn json(edges: &[Edge], status: &[ProviderStatus]) -> anyhow::Result<()> {
     let providers: Vec<serde_json::Value> = status.iter().map(|s| match &s.status {
         Availability::Available =>
             serde_json::json!({"name": s.name, "status": "available"}),
+        Availability::Degraded { reason } =>
+            serde_json::json!({"name": s.name, "status": "degraded", "reason": reason}),
         Availability::Unavailable { reason } =>
             serde_json::json!({"name": s.name, "status": "unavailable", "reason": reason}),
     }).collect();

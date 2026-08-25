@@ -16,11 +16,31 @@ use crate::model::{Edge, Guarantee, NodeId};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Availability {
     Available,
+    /// Responde, pero lo que devuelve está incompleto.
+    Degraded { reason: String },
     Unavailable { reason: String },
 }
 
 impl Availability {
-    pub fn is_available(&self) -> bool { matches!(self, Self::Available) }
+    /// ¿Se le pueden pedir aristas?
+    pub fn is_available(&self) -> bool {
+        matches!(self, Self::Available | Self::Degraded { .. })
+    }
+
+    /// ¿El grafo que sale de acá es completo?
+    ///
+    /// Distinto de `is_available`: un proveedor degradado responde, pero lo que
+    /// devuelve no alcanza para afirmar que no hay más.
+    pub fn is_complete(&self) -> bool {
+        matches!(self, Self::Available)
+    }
+
+    pub fn reason(&self) -> Option<&str> {
+        match self {
+            Self::Available => None,
+            Self::Degraded { reason } | Self::Unavailable { reason } => Some(reason),
+        }
+    }
 }
 
 pub trait Provider {
@@ -194,10 +214,19 @@ impl Provider for LspProvider {
         vec![("call", Guarantee::Derived)]
     }
 
-    fn available(&self, _scope: &Path) -> Availability {
-        match crate::daemon_client::rpc("ping", serde_json::json!({})) {
-            Ok(v) if v == serde_json::json!("pong") => Availability::Available,
-            _ => Availability::Unavailable { reason: "el daemon no responde".into() },
+    fn available(&self, scope: &Path) -> Availability {
+        if daemon_responds() { return Availability::Available; }
+
+        // Arrancarlo: pedir el grafo y que falte el call graph porque un proceso
+        // de fondo no estaba levantado no le sirve a nadie.
+        match start_daemon(scope) {
+            Ok(()) => Availability::Degraded {
+                // El daemon responde apenas arranca, pero el language server
+                // detrás sigue indexando. Decir "OK" acá haría pasar "todavía no
+                // sé" por "no hay llamadas".
+                reason: "daemon recién arrancado — el language server está indexando".into(),
+            },
+            Err(e) => Availability::Unavailable { reason: e.to_string() },
         }
     }
 
@@ -209,6 +238,35 @@ impl Provider for LspProvider {
         out.extend(Self::call_edges(scope, node, "callees")?);
         Ok(out)
     }
+}
+
+fn daemon_responds() -> bool {
+    crate::daemon_client::rpc("ping", serde_json::json!({}))
+        .map(|v| v == serde_json::json!("pong")).unwrap_or(false)
+}
+
+/// Arranca `lattice-daemon` en background y espera a que responda.
+///
+/// Se lo busca primero junto al ejecutable actual —el caso de un build local— y
+/// después en PATH.
+fn start_daemon(workspace: &Path) -> Result<()> {
+    let bin = std::env::current_exe().ok()
+        .and_then(|p| p.parent().map(|d| d.join("lattice-daemon")))
+        .filter(|p| p.exists())
+        .unwrap_or_else(|| std::path::PathBuf::from("lattice-daemon"));
+
+    std::process::Command::new(&bin)
+        .arg("--workspace").arg(workspace)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| anyhow::anyhow!("no se pudo arrancar el daemon ({}): {e}", bin.display()))?;
+
+    for _ in 0..50 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        if daemon_responds() { return Ok(()); }
+    }
+    anyhow::bail!("el daemon no respondió en 5s")
 }
 
 /// Convierte `(archivo absoluto, línea)` a la forma canónica del grafo.

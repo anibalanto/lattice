@@ -212,7 +212,7 @@ fn cmd_graph(
     edges.sort_by(|a, b| a.from.cmp(&b.from).then(a.to.cmp(&b.to)));
     let status = &graph.providers;
 
-    let degraded = status.iter().any(|s| !s.status.is_available());
+    let degraded = status.iter().any(|s| !s.status.is_complete());
 
     match format {
         "json" => render::json(&edges, status)?,
@@ -228,8 +228,12 @@ fn cmd_graph(
     }
 
     for s in status {
-        if let Availability::Unavailable { reason } = &s.status {
-            eprintln!("warn: proveedor {} no disponible ({reason})", s.name);
+        match &s.status {
+            Availability::Unavailable { reason } =>
+                eprintln!("warn: proveedor {} no disponible ({reason})", s.name),
+            Availability::Degraded { reason } =>
+                eprintln!("warn: proveedor {} incompleto ({reason})", s.name),
+            Availability::Available => {}
         }
     }
 
