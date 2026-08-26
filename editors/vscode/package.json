@@ -1,0 +1,47 @@
+{
+  "name": "bilinker",
+  "displayName": "Bilinker",
+  "description": "Bidirectional structural references across layers — hover, code lens and graph viewer",
+  "version": "0.1.0",
+  "publisher": "anibalanto",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anibalanto/lattice.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "bilinker.openGraph",
+        "title": "Bilinker: grafo del archivo actual"
+      },
+      {
+        "command": "bilinker.openSystemGraph",
+        "title": "Bilinker: grafo del sistema"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "bundle": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.0.0"
+  }
+}
