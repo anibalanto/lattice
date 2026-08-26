@@ -1,0 +1,7 @@
+file:   editors/vscode/src/extension.ts
+query:  (export_statement) @target
+
+# Cache
+range:       326~2259
+state:       RESOLVED
+resolved_at: 2026-08-26T20:05:06Z

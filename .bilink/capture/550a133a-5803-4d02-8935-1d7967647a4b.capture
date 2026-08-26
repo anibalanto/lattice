@@ -3,6 +3,6 @@ query:  (function_item
   name: (identifier) @n0 (#eq? @n0 "tree")) @target
 
 # Cache
-range:       1477~1875
+range:       1555~1953
 state:       RESOLVED
-resolved_at: 2026-08-25T00:33:31Z
+resolved_at: 2026-08-26T20:05:19Z

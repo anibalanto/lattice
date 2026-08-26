@@ -1,0 +1,8 @@
+file:   editors/vscode/src/extension.ts
+query:  (function_declaration
+  name: (identifier) @n0 (#eq? @n0 "openGraph")) @target
+
+# Cache
+range:       2471~4949
+state:       RESOLVED
+resolved_at: 2026-08-26T20:05:06Z
