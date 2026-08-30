@@ -1,5 +1,6 @@
 file:   crates/lattice/src/provider.rs
 
 # Cache
+range:       0~27418
 state:       RESOLVED
-resolved_at: 2026-08-30T00:36:12Z
+resolved_at: 2026-08-30T02:01:15Z

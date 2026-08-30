@@ -97,7 +97,7 @@ impl Provider for BilinkProvider {
     fn kinds(&self) -> Vec<(&'static str, Guarantee)> {
         vec![("bilink",  Guarantee::Accepted),
              ("governs", Guarantee::Accepted),
-             ("task",    Guarantee::Accepted)]
+             ("issue",   Guarantee::Accepted)]
     }
 
     fn available(&self, scope: &Path) -> Availability {

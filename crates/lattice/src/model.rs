@@ -45,7 +45,7 @@ impl Guarantee {
 
 /// Un fragmento direccionable, en forma canónica.
 ///
-/// `<layer-root>::<path>#<start>~<end>` · `<layer-root>::<path>` · `task:<id>` · `<uri>`
+/// `<layer-root>::<path>#<start>~<end>` · `<layer-root>::<path>` · `issue:<id>` · `<uri>`
 ///
 /// La identidad es igualdad exacta de la forma canónica. No se intenta unificar
 /// nodos con rangos parecidos: la relación entre ellos se expresa por contención,
@@ -60,9 +60,9 @@ impl fmt::Display for NodeId {
 impl NodeId {
     /// `(layer, path, range)` si el nodo es un fragmento de archivo.
     ///
-    /// Los nodos `task:` y las URIs no participan de contención y devuelven `None`.
+    /// Los nodos `issue:` y las URIs no participan de contención y devuelven `None`.
     pub fn as_fragment(&self) -> Option<(&str, &str, Option<(usize, usize)>)> {
-        if self.0.starts_with("task:") || self.0.contains("://") { return None; }
+        if self.0.starts_with("issue:") || self.0.contains("://") { return None; }
         let (layer, rest) = self.0.split_once("::")?;
         match rest.split_once('#') {
             None => Some((layer, rest, None)),
@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn task_and_uri_nodes_have_no_fragment() {
-        assert!(n("task:3a").as_fragment().is_none());
+        assert!(n("issue:3a").as_fragment().is_none());
         assert!(n("https://example.com/x").as_fragment().is_none());
     }
 
