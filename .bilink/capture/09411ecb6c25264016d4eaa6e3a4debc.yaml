@@ -1,4 +1,0 @@
-file: crates/lattice/src/daemon_client.rs
-query: |-
-  (function_item
-    name: (identifier) @n0 (#eq? @n0 "rpc")) @target

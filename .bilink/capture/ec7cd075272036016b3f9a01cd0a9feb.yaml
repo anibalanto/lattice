@@ -1,4 +1,0 @@
-file: crates/lattice/src/model.rs
-query: |-
-  (struct_item
-    name: (type_identifier) @n0 (#eq? @n0 "NodeId")) @target

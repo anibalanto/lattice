@@ -1,4 +1,0 @@
-file: crates/lattice/src/provider.rs
-query: |-
-  (struct_item
-    name: (type_identifier) @n0 (#eq? @n0 "DocProvider")) @target
