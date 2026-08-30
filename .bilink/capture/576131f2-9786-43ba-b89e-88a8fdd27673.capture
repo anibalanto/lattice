@@ -1,0 +1,8 @@
+file:   crates/lattice/src/model.rs
+query:  (struct_item
+  name: (type_identifier) @n0 (#eq? @n0 "NodeId")) @target
+
+# Cache
+range:       1984~2014
+state:       RESOLVED
+resolved_at: 2026-08-29T23:48:28Z

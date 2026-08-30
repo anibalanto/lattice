@@ -1,0 +1,8 @@
+file:   crates/lattice/src/provider.rs
+query:  (struct_item
+  name: (type_identifier) @n0 (#eq? @n0 "BilinkProvider")) @target
+
+# Cache
+range:       2739~3063
+state:       RESOLVED
+resolved_at: 2026-08-29T23:49:06Z

@@ -1,0 +1,8 @@
+file:   crates/lattice/src/provider.rs
+query:  (function_item
+  name: (identifier) @n0 (#eq? @n0 "whole_file_node")) @target
+
+# Cache
+range:       19563~20328
+state:       RESOLVED
+resolved_at: 2026-08-29T23:48:28Z

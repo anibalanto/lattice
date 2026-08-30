@@ -1,0 +1,10 @@
+file:   crates/lattice/src/model.rs
+query:  (impl_item
+  body: (declaration_list
+  (function_item
+  name: (identifier) @n0 (#eq? @n0 "contains")) @target))
+
+# Cache
+range:       3087~3781
+state:       RESOLVED
+resolved_at: 2026-08-29T23:49:06Z
