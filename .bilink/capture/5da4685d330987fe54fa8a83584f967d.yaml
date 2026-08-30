@@ -1,0 +1,6 @@
+file: crates/lattice/src/graph.rs
+query: |-
+  (impl_item
+    body: (declaration_list
+    (function_item
+    name: (identifier) @n0 (#eq? @n0 "covering")) @target))
