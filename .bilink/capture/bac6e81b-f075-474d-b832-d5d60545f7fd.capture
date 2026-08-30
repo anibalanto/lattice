@@ -1,8 +1,0 @@
-file:   crates/lattice-cli/src/render.rs
-query:  (function_item
-  name: (identifier) @n0 (#eq? @n0 "json")) @target
-
-# Cache
-range:       2922~4242
-state:       RESOLVED
-resolved_at: 2026-08-26T20:05:19Z

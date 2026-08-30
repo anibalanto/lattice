@@ -1,0 +1,114 @@
+captures:
+  006694c68eda53886058bf2612784cf7:
+    range: 1555~1953
+    state: RESOLVED
+  006b1a1c625afb8cd6c93e0ec5dec10b:
+    range: 2471~4949
+    state: RESOLVED
+  1d24247a4dfcdffb38456d65fe7e79b2:
+    range: 3090~3784
+    state: RESOLVED
+  3aaca1565e5a04a739da6f94d750715a:
+    range: 1383~2250
+    state: RESOLVED
+  3f6cc3261c3e6a662d8f81c2a2e4c050:
+    range: 4951~5320
+    state: RESOLVED
+  5118d76e32b7ce77c564ae9f18d8b149:
+    range: 333~2259
+    state: RESOLVED
+  5da4685d330987fe54fa8a83584f967d:
+    range: 2081~2373
+    state: RESOLVED
+  64222c73ab2cc8df9adf90349652e8f6:
+    range: 5074~6531
+    state: RESOLVED
+  76666ef207b27fc1774b4d7ac2bd6187:
+    range: 0~9446
+    state: RESOLVED
+  826135285252c96925d47af56bd069c5:
+    range: 0~27418
+    state: RESOLVED
+  a22a2f587023605bf3a3a892477ab4c8:
+    range: 2054~6241
+    state: RESOLVED
+  a7a2ec0384461dbd558b3123030033a4:
+    range: 2739~3063
+    state: RESOLVED
+  b8ced45dd2dd00f6502a36769a3608ec:
+    range: 2323~2817
+    state: RESOLVED
+  c21d353d91e45fc3f870bcc21492b9b4:
+    range: 2922~4242
+    state: RESOLVED
+  ec7cd075272036016b3f9a01cd0a9feb:
+    range: 1985~2015
+    state: RESOLVED
+  f630d3039c5f876edd6efad10858c084:
+    range: 19563~20328
+    state: RESOLVED
+endpoints:
+  0bd6fbdc-2b06-44c5-82db-5df78e4ea3c3.0:
+    state: OK
+  0bd6fbdc-2b06-44c5-82db-5df78e4ea3c3.1:
+    state: OK
+  0d77e2a6-c0cf-4198-921d-a907f8942a79.0:
+    state: OK
+  0d77e2a6-c0cf-4198-921d-a907f8942a79.1:
+    state: OK
+  0dd71c2d-e884-4ba9-99da-2ebd476bbcbe.0:
+    state: OK
+  0dd71c2d-e884-4ba9-99da-2ebd476bbcbe.1:
+    state: OK
+  1b56d22d-ec89-41e1-9273-c158565c7cfa.0:
+    state: OK
+  1b56d22d-ec89-41e1-9273-c158565c7cfa.1:
+    state: OK
+  309fb2bf-b5e3-44ff-bd6a-89df4a9dfc9a.0:
+    state: OK
+  309fb2bf-b5e3-44ff-bd6a-89df4a9dfc9a.1:
+    state: OK
+  657197a6-49a5-4dcb-a5d1-3c068d281ec1.0:
+    state: OK
+  657197a6-49a5-4dcb-a5d1-3c068d281ec1.1:
+    state: OK
+  8afad6a4-490f-46c0-a375-8734fafddde1.0:
+    state: OK
+  8afad6a4-490f-46c0-a375-8734fafddde1.1:
+    state: OK
+  b4f56a45-ba2d-45b3-a9be-12b5af6ba277.0:
+    state: OK
+  b4f56a45-ba2d-45b3-a9be-12b5af6ba277.1:
+    state: OK
+  bcd9cf7a-bcf4-4bda-a7d8-d56d30242df3.0:
+    state: OK
+  bcd9cf7a-bcf4-4bda-a7d8-d56d30242df3.1:
+    state: OK
+  d634881e-177b-4e13-a36b-bf86c400de93.0:
+    state: OK
+  d634881e-177b-4e13-a36b-bf86c400de93.1:
+    state: OK
+  dad0d72d-1c5a-4efc-a4b9-d8dee4704bbd.0:
+    state: OK
+  dad0d72d-1c5a-4efc-a4b9-d8dee4704bbd.1:
+    state: OK
+  de125d52-16d4-4167-acfc-468e970cce0c.0:
+    state: OK
+  de125d52-16d4-4167-acfc-468e970cce0c.1:
+    state: OK
+  ebd4c8e6-4147-4046-9750-1133ae85c66b.0:
+    state: OK
+  ebd4c8e6-4147-4046-9750-1133ae85c66b.1:
+    state: OK
+  eee6b443-811f-43a3-a74b-15d2abfaa81c.0:
+    state: OK
+  eee6b443-811f-43a3-a74b-15d2abfaa81c.1:
+    state: OK
+  f715e695-dd5c-4124-918b-924f40c634f4.0:
+    state: OK
+  f715e695-dd5c-4124-918b-924f40c634f4.1:
+    state: OK
+  faa7ac9c-2930-4d3c-9db3-1a85b56067db.0:
+    state: OK
+  faa7ac9c-2930-4d3c-9db3-1a85b56067db.1:
+    state: OK

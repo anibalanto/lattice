@@ -1,8 +1,0 @@
-file:   crates/lattice-cli/src/render.rs
-query:  (function_item
-  name: (identifier) @n0 (#eq? @n0 "dot")) @target
-
-# Cache
-range:       5074~6531
-state:       RESOLVED
-resolved_at: 2026-08-26T20:05:19Z

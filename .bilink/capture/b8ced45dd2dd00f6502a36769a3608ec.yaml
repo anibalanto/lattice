@@ -1,0 +1,6 @@
+file: crates/lattice/src/model.rs
+query: |-
+  (impl_item
+    body: (declaration_list
+    (function_item
+    name: (identifier) @n0 (#eq? @n0 "as_fragment")) @target))

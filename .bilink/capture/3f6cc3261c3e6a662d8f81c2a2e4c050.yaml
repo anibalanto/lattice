@@ -1,0 +1,4 @@
+file: editors/vscode/src/extension.ts
+query: |-
+  (function_declaration
+    name: (identifier) @n0 (#eq? @n0 "findBinary")) @target

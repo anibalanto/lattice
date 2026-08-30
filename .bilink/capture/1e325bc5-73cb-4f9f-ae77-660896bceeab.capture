@@ -1,8 +1,0 @@
-file:   crates/lattice/src/provider.rs
-query:  (trait_item
-  name: (type_identifier) @n0 (#eq? @n0 "Provider")) @target
-
-# Cache
-range:       1383~2250
-state:       RESOLVED
-resolved_at: 2026-08-29T23:48:28Z

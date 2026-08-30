@@ -1,8 +1,0 @@
-file:   crates/lattice-cli/src/html.rs
-query:  (function_item
-  name: (identifier) @n0 (#eq? @n0 "render")) @target
-
-# Cache
-range:       2054~6241
-state:       RESOLVED
-resolved_at: 2026-08-25T00:33:30Z
