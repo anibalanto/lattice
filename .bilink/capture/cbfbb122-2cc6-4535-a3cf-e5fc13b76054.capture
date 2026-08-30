@@ -1,0 +1,8 @@
+file:   editors/vscode/src/extension.ts
+query:  (function_declaration
+  name: (identifier) @n0 (#eq? @n0 "activate")) @target
+
+# Cache
+range:       333~2259
+state:       RESOLVED
+resolved_at: 2026-08-30T00:34:05Z
