@@ -7,5 +7,7 @@ endpoint:
   1:
     link: capture 0684e994edd0a2798691dd4639ae7927
     accepted:
+      agree:
+      - Anibal
       link: capture 0684e994edd0a2798691dd4639ae7927
-      hash: cc04e3c30f3b4c061ccbdd201937d9f922f26b43492ecb7a752823033a3fdc4b
+      hash: 0ff42fb743a2632b5356d7a5eb53733e0c649b55d95a959acb0ae120a3d23ad1
