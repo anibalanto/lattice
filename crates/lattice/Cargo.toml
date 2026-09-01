@@ -3,6 +3,7 @@ name = "lattice"
 version = "0.1.0"
 edition = "2021"
 
+license.workspace = true
 [dependencies]
 # El cliente del daemon es de lspd, no de lattice: hay más de un consumidor.
 lspd-client = { git = "https://github.com/anibalanto/lspd.git", branch = "main" }
