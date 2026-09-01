@@ -220,6 +220,7 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 [[package]]
 name = "lspd-client"
 version = "0.1.0"
+source = "git+https://github.com/anibalanto/lspd.git?branch=main#e91cf93c2ed29ea018c9a79f253764dfd2d73638"
 dependencies = [
  "anyhow",
  "serde_json",
