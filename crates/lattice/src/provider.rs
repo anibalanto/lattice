@@ -178,7 +178,7 @@ impl LspProvider {
         let Some((file, line, col)) = Self::anchor_of(scope, node) else {
             return Ok(Vec::new());
         };
-        let val = crate::daemon_client::rpc(method,
+        let val = lspd_client::rpc(method,
             serde_json::json!({ "file": file, "line": line, "col": col }))?;
         let calls: Vec<CallInfo> = serde_json::from_value(val).unwrap_or_default();
 
@@ -241,32 +241,17 @@ impl Provider for LspProvider {
 }
 
 fn daemon_responds() -> bool {
-    crate::daemon_client::rpc("ping", serde_json::json!({}))
-        .map(|v| v == serde_json::json!("pong")).unwrap_or(false)
+    lspd_client::responds()
 }
 
-/// Arranca `lattice-daemon` en background y espera a que responda.
+/// Arranca `lspd` en background y espera a que responda.
 ///
-/// Se lo busca primero junto al ejecutable actual —el caso de un build local— y
-/// después en PATH.
+/// **Arrancarlo es política de lattice, no del daemon.** El mecanismo —dónde está el
+/// binario, cuánto se espera— lo pone `lspd_client`; lo que decide este subsistema
+/// es que valga la pena hacerlo. Bilinker, el otro consumidor, decidió lo contrario:
+/// no lo arranca nunca y degrada a *no verificado*.
 fn start_daemon(workspace: &Path) -> Result<()> {
-    let bin = std::env::current_exe().ok()
-        .and_then(|p| p.parent().map(|d| d.join("lattice-daemon")))
-        .filter(|p| p.exists())
-        .unwrap_or_else(|| std::path::PathBuf::from("lattice-daemon"));
-
-    std::process::Command::new(&bin)
-        .arg("--workspace").arg(workspace)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| anyhow::anyhow!("no se pudo arrancar el daemon ({}): {e}", bin.display()))?;
-
-    for _ in 0..50 {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        if daemon_responds() { return Ok(()); }
-    }
-    anyhow::bail!("el daemon no respondió en 5s")
+    lspd_client::spawn(workspace).map(|_| ())
 }
 
 /// Convierte `(archivo absoluto, línea)` a la forma canónica del grafo.
