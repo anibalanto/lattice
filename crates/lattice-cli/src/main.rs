@@ -247,48 +247,22 @@ fn cmd_graph(
 
 // ─── daemon ───────────────────────────────────────────────────────────────────
 
-fn lattice_dir() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-    PathBuf::from(home).join(".lattice")
-}
-
-fn daemon_pid() -> u32 {
-    std::fs::read_to_string(lattice_dir().join("daemon.pid"))
-        .ok().and_then(|s| s.trim().parse().ok()).unwrap_or(0)
-}
+// **`lattice daemon` no es un comando propio: es el mismo, reexportado.** El daemon
+// salió de lattice, y quitarle a la gente el comando que venía usando sería cobrarle
+// una reorganización que no pidió. Lo que hay acá es delegación y nada más.
 
 fn daemon_alive() -> bool {
-    lattice::daemon_client::rpc("ping", serde_json::json!({}))
-        .map(|v| v == serde_json::json!("pong")).unwrap_or(false)
+    lspd_client::responds()
 }
 
 fn daemon_start(workspace: &Path) -> anyhow::Result<()> {
     if daemon_alive() {
-        eprintln!("el daemon ya está corriendo  pid={}", daemon_pid());
+        eprintln!("el daemon ya está corriendo  pid={}", lspd_client::pid());
         std::process::exit(1);
     }
-    let bin = std::env::current_exe()?.parent()
-        .map(|d| d.join("lattice-daemon"))
-        .filter(|p| p.exists())
-        .unwrap_or_else(|| PathBuf::from("lattice-daemon"));
-
-    let child = std::process::Command::new(&bin)
-        .arg("--workspace").arg(workspace)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()?;
-
-    // El daemon escribe su pid al arrancar; esperar a que responda evita
-    // reportar "started" sobre un proceso que murió en el handshake.
-    for _ in 0..50 {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        if daemon_alive() {
-            println!("daemon started  pid={}  socket={}",
-                     child.id(), lattice_dir().join("daemon.sock").display());
-            return Ok(());
-        }
-    }
-    anyhow::bail!("el daemon no respondió en 5s")
+    let pid = lspd_client::spawn(workspace)?;
+    println!("lspd started  pid={pid}  endpoint={}", lspd_client::endpoint());
+    Ok(())
 }
 
 fn daemon_stop() -> anyhow::Result<()> {
@@ -296,8 +270,8 @@ fn daemon_stop() -> anyhow::Result<()> {
         eprintln!("el daemon no está corriendo");
         std::process::exit(1);
     }
-    lattice::daemon_client::rpc("shutdown", serde_json::json!({}))?;
-    println!("daemon stopped");
+    lspd_client::rpc("shutdown", serde_json::json!({}))?;
+    println!("lspd stopped");
     Ok(())
 }
 
@@ -306,10 +280,9 @@ fn daemon_status() -> anyhow::Result<()> {
         eprintln!("el daemon no está corriendo");
         std::process::exit(1);
     }
-    println!("daemon  pid={}  socket={}", daemon_pid(),
-             lattice_dir().join("daemon.sock").display());
+    println!("lspd  pid={}  endpoint={}", lspd_client::pid(), lspd_client::endpoint());
 
-    let servers = lattice::daemon_client::rpc("status", serde_json::json!({}))?;
+    let servers = lspd_client::rpc("status", serde_json::json!({}))?;
     println!("\nlanguage servers:");
     match servers.as_array() {
         Some(list) if !list.is_empty() => {

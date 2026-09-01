@@ -9,6 +9,8 @@ path = "src/main.rs"
 
 [dependencies]
 lattice    = { path = "../lattice" }
+# Ver el comentario en `crates/lattice/Cargo.toml`: pasa a git cuando lspd se publique.
+lspd-client = { path = "../../../../../lspd/.stratum/impl/crates/lspd-client" }
 anyhow     = "1"
 clap       = { version = "4", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
