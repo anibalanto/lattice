@@ -1,13 +1,13 @@
 endpoint:
-  0:
+  '0':
     link: path <
     accepted:
-      link: capture ffd2821dd96cae3151135adbaeb17426
+    - link: capture ffd2821dd96cae3151135adbaeb17426
       hash: 3e860089fd7324441e7d5385ec29ba53038ec2b61680745535f2443890aa1487
-  1:
+  '1':
     link: capture 826135285252c96925d47af56bd069c5
     accepted:
-      agree:
+    - agree:
       - Anibal
       link: capture 826135285252c96925d47af56bd069c5
       hash: 39d9b9ae1297da782e3f4a249d56f2d38fa8161d976a85820ba85b54b35b4ce2
