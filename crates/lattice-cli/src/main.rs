@@ -65,9 +65,18 @@ enum DaemonCommand {
         workspace: Option<PathBuf>,
     },
     /// Envía shutdown a los language servers y termina el proceso
-    Stop,
+    /// **Y también toman el workspace**, porque la ruta del socket se deriva
+    /// de él: parar "el" daemon dejó de tener sentido cuando hay uno por
+    /// proyecto. Por defecto, el de acá.
+    Stop {
+        #[arg(long)]
+        workspace: Option<PathBuf>,
+    },
     /// Estado del daemon y de los language servers activos
-    Status,
+    Status {
+        #[arg(long)]
+        workspace: Option<PathBuf>,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -85,8 +94,8 @@ fn main() -> anyhow::Result<()> {
 
         Command::Daemon { sub } => match sub {
             DaemonCommand::Start { workspace } => daemon_start(&workspace.unwrap_or(cwd)),
-            DaemonCommand::Stop   => daemon_stop(),
-            DaemonCommand::Status => daemon_status(),
+            DaemonCommand::Stop { workspace } => daemon_stop(&workspace.unwrap_or(cwd)),
+            DaemonCommand::Status { workspace } => daemon_status(&workspace.unwrap_or(cwd)),
         },
     }
 }
@@ -251,38 +260,45 @@ fn cmd_graph(
 // salió de lattice, y quitarle a la gente el comando que venía usando sería cobrarle
 // una reorganización que no pidió. Lo que hay acá es delegación y nada más.
 
-fn daemon_alive() -> bool {
-    lspd_client::responds()
+// **Y el daemon es el de un workspace, no "el" del sistema.** La ruta del
+// socket se deriva de él, así que preguntar sin decir cuál dejó de tener
+// sentido. Ver `concepts/transport.md` de lspd.
+
+fn daemon_alive(workspace: &Path) -> bool {
+    lspd_client::responds(workspace)
 }
 
 fn daemon_start(workspace: &Path) -> anyhow::Result<()> {
-    if daemon_alive() {
-        eprintln!("el daemon ya está corriendo  pid={}", lspd_client::pid());
+    if daemon_alive(workspace) {
+        eprintln!("el daemon de este workspace ya está corriendo  pid={}",
+            lspd_client::pid(workspace));
         std::process::exit(1);
     }
     let pid = lspd_client::spawn(workspace)?;
-    println!("lspd started  pid={pid}  endpoint={}", lspd_client::endpoint());
+    println!("lspd started  pid={pid}  endpoint={}", lspd_client::endpoint(workspace));
     Ok(())
 }
 
-fn daemon_stop() -> anyhow::Result<()> {
-    if !daemon_alive() {
-        eprintln!("el daemon no está corriendo");
+fn daemon_stop(workspace: &Path) -> anyhow::Result<()> {
+    if !daemon_alive(workspace) {
+        // Dice de cuál: que no haya uno acá no dice nada de los otros.
+        eprintln!("no hay daemon en {}", lspd_client::endpoint(workspace));
         std::process::exit(1);
     }
-    lspd_client::rpc("shutdown", serde_json::json!({}))?;
+    lspd_client::rpc(workspace, "shutdown", serde_json::json!({}))?;
     println!("lspd stopped");
     Ok(())
 }
 
-fn daemon_status() -> anyhow::Result<()> {
-    if !daemon_alive() {
-        eprintln!("el daemon no está corriendo");
+fn daemon_status(workspace: &Path) -> anyhow::Result<()> {
+    if !daemon_alive(workspace) {
+        eprintln!("no hay daemon en {}", lspd_client::endpoint(workspace));
         std::process::exit(1);
     }
-    println!("lspd  pid={}  endpoint={}", lspd_client::pid(), lspd_client::endpoint());
+    println!("lspd  pid={}  endpoint={}",
+        lspd_client::pid(workspace), lspd_client::endpoint(workspace));
 
-    let servers = lspd_client::rpc("status", serde_json::json!({}))?;
+    let servers = lspd_client::rpc(workspace, "status", serde_json::json!({}))?;
     println!("\nlanguage servers:");
     match servers.as_array() {
         Some(list) if !list.is_empty() => {

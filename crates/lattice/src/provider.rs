@@ -178,7 +178,9 @@ impl LspProvider {
         let Some((file, line, col)) = Self::anchor_of(scope, node) else {
             return Ok(Vec::new());
         };
-        let val = lspd_client::rpc(method,
+        // **A la puerta de este scope**, no a "la" del sistema: la ruta se
+        // deriva del workspace, asi que dos proyectos abiertos ya no se pisan.
+        let val = lspd_client::rpc(scope, method,
             serde_json::json!({ "file": file, "line": line, "col": col }))?;
         let calls: Vec<CallInfo> = serde_json::from_value(val).unwrap_or_default();
 
@@ -215,7 +217,10 @@ impl Provider for LspProvider {
     }
 
     fn available(&self, scope: &Path) -> Availability {
-        if daemon_responds() { return Availability::Available; }
+        // **La puerta es la de este scope**, y ya la tenemos: `available` recibe
+        // el scope. Antes se preguntaba por "el" daemon del sistema, y con dos
+        // proyectos abiertos eso contestaba por el que no era.
+        if daemon_responds(scope) { return Availability::Available; }
 
         // Arrancarlo: pedir el grafo y que falte el call graph porque un proceso
         // de fondo no estaba levantado no le sirve a nadie.
@@ -240,8 +245,8 @@ impl Provider for LspProvider {
     }
 }
 
-fn daemon_responds() -> bool {
-    lspd_client::responds()
+fn daemon_responds(workspace: &Path) -> bool {
+    lspd_client::responds(workspace)
 }
 
 /// Arranca `lspd` en background y espera a que responda.
