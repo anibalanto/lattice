@@ -1,0 +1,6 @@
+file: docs/specs/concepts/edge.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "La anatomía"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "Toda arista tiene `provider` y `guarantee`"))) @target)

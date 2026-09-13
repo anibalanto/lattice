@@ -1,0 +1,6 @@
+file: docs/specs/concepts/node.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "El anclaje"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "El anclaje de un nodo es la línea de su primer byte y la columna del identificador declarado"))) @target)

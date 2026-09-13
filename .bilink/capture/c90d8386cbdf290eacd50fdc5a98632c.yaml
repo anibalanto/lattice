@@ -1,0 +1,6 @@
+file: docs/specs/concepts/node.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "El anclaje"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "La columna del identificador es la que sigue a la palabra que declara"))) @target)

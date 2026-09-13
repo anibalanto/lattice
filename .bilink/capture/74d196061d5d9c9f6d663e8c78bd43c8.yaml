@@ -1,0 +1,4 @@
+file: crates/lattice-cli/src/main.rs
+query: |-
+  (enum_item
+    name: (type_identifier) @n0 (#eq? @n0 "DaemonCommand")) @target

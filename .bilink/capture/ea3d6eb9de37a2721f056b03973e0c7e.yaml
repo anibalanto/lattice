@@ -1,0 +1,6 @@
+file: docs/specs/concepts/node.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "La contención"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "`cubriendo(pos)` devuelve los nodos ordenados de más específico a más general"))) @target)

@@ -1,0 +1,6 @@
+file: docs/specs/concepts/editor.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "Los comandos de grafo"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "`bilinker.openGraph` corre `lattice graph <ruta-relativa> --format html` desde la raíz del workspace"))) @target)

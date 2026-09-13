@@ -1,0 +1,6 @@
+file: docs/specs/concepts/editor.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "La activación"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "La extensión activa al terminar el arranque y busca `bilinker-lsp`"))) @target)

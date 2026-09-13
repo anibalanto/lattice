@@ -1,0 +1,6 @@
+file: docs/specs/concepts/node.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "La forma canónica"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "Todo nodo tiene forma canónica"))) @target)

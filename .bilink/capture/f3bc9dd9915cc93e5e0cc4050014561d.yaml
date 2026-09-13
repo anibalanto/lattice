@@ -1,0 +1,6 @@
+file: docs/specs/concepts/node.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "Los nodos sin rango"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "Los nodos `issue:<id>` y las URIs no participan de contención"))) @target)

@@ -1,0 +1,6 @@
+file: docs/specs/concepts/daemon.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "Quién lo arranca"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "El auto-start sí es de lattice"))) @target)

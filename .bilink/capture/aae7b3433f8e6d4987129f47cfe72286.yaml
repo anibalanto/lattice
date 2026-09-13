@@ -1,0 +1,6 @@
+file: docs/specs/concepts/daemon.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "El comando"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "El daemon es el de un workspace, no el del sistema"))) @target)

@@ -1,0 +1,6 @@
+file: docs/specs/concepts/graph.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "El recorrido"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "Una rama que alcanza una arista `accepted` se detiene, salvo desde el nodo de partida"))) @target)

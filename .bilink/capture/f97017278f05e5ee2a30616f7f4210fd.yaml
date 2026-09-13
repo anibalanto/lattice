@@ -1,0 +1,6 @@
+file: docs/specs/concepts/edge.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "La deduplicación"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "Los extremos se ordenan para comparar solo si la arista no es dirigida"))) @target)

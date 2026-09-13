@@ -1,0 +1,6 @@
+file: docs/specs/concepts/node.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "El anclaje"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "Un nodo sin anclaje resoluble no produce aristas `derived`, pero sigue en el grafo"))) @target)

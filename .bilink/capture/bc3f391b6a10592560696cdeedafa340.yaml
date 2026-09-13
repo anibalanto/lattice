@@ -1,0 +1,6 @@
+file: docs/specs/concepts/editor.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "Hover y code lens"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "Al hacer click en la lente se abre un panel con los ids de los bilinks del fragmento"))) @target)

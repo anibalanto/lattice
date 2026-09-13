@@ -1,0 +1,6 @@
+file: docs/specs/concepts/graph.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "El selector"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "Un selector resuelve a los nodos de partida del traversal"))) @target)

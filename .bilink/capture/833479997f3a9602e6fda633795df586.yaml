@@ -1,0 +1,6 @@
+file: docs/specs/concepts/graph.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "Las salidas"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "En `dot` la garantía se codifica en el trazo"))) @target)

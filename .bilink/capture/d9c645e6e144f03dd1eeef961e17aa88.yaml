@@ -1,0 +1,6 @@
+file: docs/specs/concepts/edge.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "La garantía"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "Un consumidor puede filtrar por garantía, pero nunca recibe una arista sin ella"))) @target)
