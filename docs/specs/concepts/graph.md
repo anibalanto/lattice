@@ -9,6 +9,7 @@ lattice graph [<selector>]
   [--guarantee <nivel>]
   [--state <filtro>]
   [--depth <n>]
+  [--cross]
   [--format <tree|flat|json|dot|html>]
   [--recursive]
 ```
@@ -21,7 +22,8 @@ lattice graph [<selector>]
 | `--via <kinds>` | Lista de `kind` habilitados: `bilink,governs,issue,call,doclink,external`. Default: todos. |
 | `--guarantee <nivel>` | Garantía mínima: `accepted`, `derived`, `asserted`. Default: `asserted`, o sea todas. |
 | `--state <filtro>` | Solo aristas con ese estado en alguno de sus extremos. `non-ok` selecciona todo lo distinto de OK. |
-| `--depth <n>` | Profundidad máxima. Default: sin límite. |
+| `--depth <n>` | Profundidad máxima. Default: sin límite, y 6 con `--cross`. |
+| `--cross` | Recorrido de impacto: expande el call graph en cada nodo y cruza las aristas `accepted`. Ver "Las dos maneras de recorrer". |
 | `--format` | `tree` por defecto. Ver "Las salidas". |
 | `--recursive` | Recolecta también desde las capas descendientes. Se delega en el proveedor `bilink`. |
 
@@ -67,7 +69,7 @@ Una posición que ningún nodo cubre no resuelve, y el comando sale con 1.
 
 ### Los proveedores que expanden bajo demanda aportan sus aristas antes de recorrer
 
-Sobre cada nodo de partida se piden las aristas incidentes a los proveedores que implementan `edges_from`, y el grafo se recompone con ellas, deduplicado. Si no, el traversal solo vería lo que los que enumeran ya habían puesto.
+Sobre cada nodo de partida se piden las aristas incidentes a los proveedores que implementan `edges_from`, y el grafo se recompone con ellas, deduplicado. Si no, el traversal solo vería lo que los que enumeran ya habían puesto. Con `--cross` se piden además en cada nodo que se alcanza.
 
 ### El traversal cruza de una garantía a otra por contención
 
@@ -89,11 +91,28 @@ El salto por contención no consume profundidad: no es un paso del grafo, es rec
 
 ### Una rama que alcanza una arista `accepted` se detiene, salvo desde el nodo de partida
 
-Sin ese corte, el traversal seguiría subiendo más allá del límite del subgrafo que alguien documentó, que es justamente el borde que interesa. La arista `accepted` se emite; lo que hay del otro lado, no.
+Sin ese corte, el traversal seguiría subiendo más allá del límite del subgrafo que alguien documentó, que es justamente el borde que interesa. La arista `accepted` se emite; lo que hay del otro lado, no. Con `--cross` no hay corte.
 
 ### Un nodo ya visitado no se expande
 
 Visited-set sobre la forma canónica del nodo. Un ciclo termina sin volver a recorrerse.
+
+## Las dos maneras de recorrer
+
+### Sin `--cross`, el recorrido llega hasta el borde de lo documentado
+
+Es la manera de contestar *"¿qué documentado alcanza esto?"*: qué spec gobierna una función, qué bilinks referencian un archivo, qué specs alcanza un cambio subiendo un salto por las llamadas. Expande el call graph sólo en los nodos de partida y para en la primera arista `accepted`, así que no necesita tope de profundidad.
+
+### Con `--cross`, el recorrido cruza lo documentado y sigue del otro lado
+
+Es la manera de contestar *"¿qué toca este cambio?"* cuando la respuesta está varios bilinks más allá: desde un servicio del back, los flujos funcionales que lo usan, pasando por el endpoint que lo llama, el bilink al servicio del front y el componente que llama a ese servicio.
+
+Medido el 2026-09-16 sobre `sge`, con `jdtls` y `typescript-language-server` listos: `lattice graph DashboardServiceImpl.java:118:40 --up --cross` llega a los escenarios `TAB-J-09` y `TAB-U-05` de `tableros.feature` y a ningún otro flujo, con 8 aristas en 11,6 s. Sin `--cross`, el mismo recorrido para en el bilink del endpoint.
+
+- **El call graph se expande en cada nodo que se alcanza**, no sólo en los de partida.
+- **Una arista `accepted` se cruza, y el recorrido sigue del otro lado.**
+- **Desde un nodo al que se llegó por una arista `accepted` no se toma otra.** Sería volver por la misma, o saltar a otro bilink del mismo fragmento. Las llamadas sí se siguen. El nodo se marca visitado junto con cómo se llegó a él: alcanzado después por una llamada, puede tomar sus aristas `accepted`.
+- **La profundidad tiene tope**, 6 si no se pide otro con `--depth`: cada llamada y cada arista `accepted` cuentan un paso, y el salto por contención no cuenta.
 
 ## Las salidas
 
