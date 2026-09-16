@@ -1,0 +1,8 @@
+file: crates/lattice/src/provider.rs
+query: |-
+  (impl_item
+    trait: (type_identifier) @n0 (#eq? @n0 "Provider")
+    type: (type_identifier) @n1 (#eq? @n1 "BilinkProvider")
+    body: (declaration_list
+    (function_item
+    name: (identifier) @n2 (#eq? @n2 "edges_with_gaps")) @target))
