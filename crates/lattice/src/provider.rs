@@ -203,7 +203,7 @@ impl LspProvider {
                 provider: "lsp".into(),
                 directed: true,
                 r#ref: c.name,
-                state: None, commit: None, broken: false,
+                state: None, commit: None, broken: false, declaration: None,
             })
         }).collect())
     }
@@ -471,7 +471,7 @@ impl Provider for DocProvider {
                     directed: true,
                     r#ref: target,
                     state: None, commit: None,
-                    broken,
+                    broken, declaration: None,
                 });
             }
         }
@@ -589,7 +589,7 @@ mod tests {
         Edge {
             from: NodeId(from.into()), to: NodeId(to.into()), kind: kind.into(),
             guarantee: g, provider: provider.into(), directed: false,
-            r#ref: String::new(), state: None, commit: None, broken: false,
+            r#ref: String::new(), state: None, commit: None, broken: false, declaration: None,
         }
     }
 
@@ -611,6 +611,14 @@ mod tests {
             edge(".::a#0~1", ".::b#0~1", "call",   Guarantee::Derived,  "lsp"),
         ]);
         assert_eq!(out.len(), 2, "kinds distintos son conexiones distintas");
+    }
+
+    #[test]
+    fn the_bilink_contract_carries_spans_and_declaration() {
+        let json = r#"[{"from":".::spec.md#0~26","to":".::C.java#16~51,106~144","kind":"bilink","guarantee":"accepted","provider":"bilinker","directed":false,"ref":"u","state":["OK","OK"],"commit":["a","b"],"declaration":[null,"106~262"]}]"#;
+        let edges: Vec<Edge> = serde_json::from_str(json).unwrap();
+        assert_eq!(edges[0].declaration_of(&edges[0].to), Some((106, 262)));
+        assert_eq!(edges[0].declaration_of(&edges[0].from), None);
     }
 
     #[test]

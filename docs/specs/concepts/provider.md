@@ -47,7 +47,7 @@ Sin `edges_from`, lattice enumera todo el scope con `edges` y filtra. Con `edges
 
 Lee los bilinks de la capa y, con `--recursive`, de las capas descendientes. Emite una arista por cadena, entre los dos tips estructurales, nunca entre los nodos intermedios de la cadena.
 
-Bilinker entrega los nodos en forma canónica, con los paths Stratum resueltos a la raíz de capa concreta, la topología de cadena resuelta y el rango vigente que el último `check` dejó en su cache. Nada de eso es conocimiento que lattice pueda tener sin duplicar el formato de bilinker: bilinker sabe qué significa un bilink y cómo resolverlo; lattice sabe cómo componer aristas heterogéneas.
+Bilinker entrega los nodos en forma canónica, con los paths Stratum resueltos a la raíz de capa concreta, la topología de cadena resuelta y los tramos vigentes que el último `check` dejó en su cache, con la declaración de cada nodo de varios tramos en `declaration` ([node.md](node.md), "Un nodo con declaración contiene además lo que cae adentro de ella"). Nada de eso es conocimiento que lattice pueda tener sin duplicar el formato de bilinker: bilinker sabe qué significa un bilink y cómo resolverlo; lattice sabe cómo componer aristas heterogéneas.
 
 Que `--recursive` se delegue en bilinker, en vez de que lattice recorra `.stratum/`, es la misma línea: dónde vive una capa es conocimiento de Stratum y del formato bilink, no del grafo agregado.
 
