@@ -56,6 +56,24 @@ impl Graph {
         Self { edges, providers, incident, declarations }
     }
 
+    /// Suma aristas que no estaban, sin mover los índices de las que ya estaban.
+    ///
+    /// Una arista cuya clave de deduplicación ya está no entra: el recorrido
+    /// guarda índices, y recomponer el grafo entero los invalidaría.
+    pub fn add_edges(&mut self, edges: Vec<Edge>) {
+        let mut known: HashSet<(String, String, String)> =
+            self.edges.iter().map(Edge::dedup_key).collect();
+        for e in edges {
+            if !known.insert(e.dedup_key()) { continue; }
+            let i = self.edges.len();
+            for n in [&e.from, &e.to] {
+                self.incident.entry(n.clone()).or_default().push(i);
+                if let Some(d) = e.declaration_of(n) { self.declarations.insert(n.clone(), d); }
+            }
+            self.edges.push(e);
+        }
+    }
+
     pub fn nodes(&self) -> BTreeSet<&NodeId> {
         self.incident.keys().collect()
     }
@@ -149,6 +167,55 @@ impl Graph {
 
         reached.into_iter().collect()
     }
+
+    /// El recorrido de impacto: expande en cada nodo y cruza las aristas `accepted`.
+    ///
+    /// `expand` da las aristas incidentes a un nodo que el grafo todavía no tiene,
+    /// y se pide en cada nodo que sale de la cola. Una arista `accepted` se cruza,
+    /// pero desde el nodo al que se llegó por ella no se toma otra: sería volver, o
+    /// saltar a otro bilink del mismo fragmento. Por eso un nodo se marca visitado
+    /// junto con cómo se llegó a él.
+    pub fn traverse_crossing(
+        &mut self, starts: &[NodeId], opts: &TraverseOpts,
+        mut expand: impl FnMut(&NodeId) -> Vec<Edge>,
+    ) -> Vec<usize> {
+        let mut visited: HashSet<(NodeId, bool)> = HashSet::new();
+        let mut reached: BTreeSet<usize> = BTreeSet::new();
+        let mut queue: VecDeque<(NodeId, usize, bool)> =
+            starts.iter().cloned().map(|n| (n, 0, false)).collect();
+
+        while let Some((node, depth, crossed)) = queue.pop_front() {
+            if !visited.insert((node.clone(), crossed)) { continue; }
+            if opts.depth.is_some_and(|d| depth >= d) { continue; }
+            self.add_edges(expand(&node));
+
+            // Como en `traverse`, el salto por contención no consume profundidad.
+            let mut frontier: Vec<NodeId> = vec![node.clone()];
+            for m in self.related_by_containment(&node) {
+                if !visited.contains(&(m.clone(), crossed)) { frontier.push(m.clone()); }
+            }
+
+            for current in frontier {
+                visited.insert((current.clone(), crossed));
+                let Some(idxs) = self.incident.get(&current) else { continue };
+
+                for &i in idxs {
+                    let e = &self.edges[i];
+                    if !Self::passable(e, &current, opts.direction) { continue; }
+                    let accepted = e.guarantee == Guarantee::Accepted;
+                    if crossed && accepted { continue; }
+                    reached.insert(i);
+                    if let Some(other) = e.other(&current) {
+                        if !visited.contains(&(other.clone(), accepted)) {
+                            queue.push_back((other.clone(), depth + 1, accepted));
+                        }
+                    }
+                }
+            }
+        }
+
+        reached.into_iter().collect()
+    }
 }
 
 #[cfg(test)]
@@ -233,6 +300,68 @@ mod tests {
         let hits: Vec<&str> = g.covering(".", "C.java", 135).iter().map(|n| n.0.as_str()).collect();
         assert_eq!(hits, vec![".::C.java#130~200", ".::C.java#100~120,140~160"],
                    "y a 135, entre las partes, lo cubre la declaración, más larga");
+    }
+
+    /// La cadena de sge, con las llamadas sólo disponibles expandiendo:
+    ///
+    /// servicio ←call— endpoint ⊂ bilink back —accepted— front ←call— componente
+    /// ⊂ bilink de flujo —accepted— flujo
+    fn impact_chain() -> (Graph, HashMap<&'static str, Vec<Edge>>) {
+        let g = graph(vec![
+            with_declaration(edge(".::svc.ts#500~800", ".::Ctrl.java#10~30,100~120,140~160", "bilink", Guarantee::Accepted, false), "95~260"),
+            edge(".::flujos.feature#0~40", ".::comp.ts#0~900", "bilink", Guarantee::Accepted, false),
+            edge(".::flujos.feature#50~90", ".::otro.ts#0~900", "bilink", Guarantee::Accepted, false),
+        ]);
+        let mut calls = HashMap::new();
+        calls.insert(".::Impl.java#40~40", vec![
+            edge(".::Ctrl.java#125~125", ".::Impl.java#40~40", "call", Guarantee::Derived, true)]);
+        calls.insert(".::svc.ts#500~800", vec![
+            edge(".::comp.ts#300~300", ".::svc.ts#500~800", "call", Guarantee::Derived, true)]);
+        (g, calls)
+    }
+
+    fn crossing(g: &mut Graph, calls: &HashMap<&'static str, Vec<Edge>>, depth: usize) -> BTreeSet<String> {
+        let opts = TraverseOpts { direction: Direction::Up, depth: Some(depth), stop_at_accepted: false };
+        let reached = g.traverse_crossing(&[n(".::Impl.java#40~40")], &opts,
+            |node| calls.get(node.0.as_str()).cloned().unwrap_or_default());
+        reached.iter().map(|&i| g.edges[i].r#ref.clone()).collect()
+    }
+
+    #[test]
+    fn crossing_reaches_the_flow_through_calls_and_bilinks() {
+        let (mut g, calls) = impact_chain();
+        let reached = crossing(&mut g, &calls, 6);
+        assert!(reached.contains(".::flujos.feature#0~40->.::comp.ts#0~900"),
+                "llega al flujo del componente: {reached:?}");
+        assert!(!reached.contains(".::flujos.feature#50~90->.::otro.ts#0~900"),
+                "y a ningún otro: {reached:?}");
+    }
+
+    #[test]
+    fn crossing_expands_every_reached_node() {
+        let (mut g, calls) = impact_chain();
+        let reached = crossing(&mut g, &calls, 6);
+        assert!(reached.contains(".::comp.ts#300~300->.::svc.ts#500~800"),
+                "la llamada al servicio del front sólo sale expandiendo del otro lado del bilink: {reached:?}");
+    }
+
+    #[test]
+    fn crossing_does_not_take_an_accepted_edge_from_a_node_reached_by_one() {
+        let (g, calls) = impact_chain();
+        let mut edges = g.edges;
+        // Otro bilink sobre el mismo fragmento del front: tomarlo sería saltar de bilink en bilink.
+        edges.push(edge(".::svc.ts#500~800", ".::otra-spec.md#0~10", "bilink", Guarantee::Accepted, false));
+        let mut g = graph(edges);
+        let reached = crossing(&mut g, &calls, 6);
+        assert!(!reached.contains(".::svc.ts#500~800->.::otra-spec.md#0~10"), "{reached:?}");
+    }
+
+    #[test]
+    fn crossing_stops_at_the_depth_cap() {
+        let (mut g, calls) = impact_chain();
+        let reached = crossing(&mut g, &calls, 3);
+        assert!(reached.contains(".::comp.ts#300~300->.::svc.ts#500~800"), "tres pasos: {reached:?}");
+        assert!(!reached.contains(".::flujos.feature#0~40->.::comp.ts#0~900"), "el cuarto no: {reached:?}");
     }
 
     #[test]
