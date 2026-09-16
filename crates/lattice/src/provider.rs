@@ -57,6 +57,15 @@ pub trait Provider {
     /// expande bajo demanda.
     fn edges(&self, scope: &Path) -> Result<Vec<Edge>>;
 
+    /// Sus aristas, y la razón si lo que devolvió está incompleto.
+    ///
+    /// `available()` no siempre puede saberlo antes: un proveedor que lo descubre
+    /// al contestar lo dice acá, y queda `Degraded` con esa razón. El default es
+    /// el de los que no lo descubren nunca.
+    fn edges_with_gaps(&self, scope: &Path) -> Result<(Vec<Edge>, Option<String>)> {
+        Ok((self.edges(scope)?, None))
+    }
+
     /// Aristas incidentes a un nodo, para proveedores que expanden bajo demanda.
     ///
     /// El default vacío es correcto para los que enumeran: sus aristas ya
@@ -113,16 +122,26 @@ impl Provider for BilinkProvider {
     }
 
     fn edges(&self, scope: &Path) -> Result<Vec<Edge>> {
+        Ok(self.edges_with_gaps(scope)?.0)
+    }
+
+    /// `bilinker graph` sale con 3 cuando emitió aristas y dejó bilinks afuera,
+    /// sin rango en la cache: lo que salió se compone, y lo que dijo por stderr es
+    /// la razón de que el grafo no esté completo.
+    fn edges_with_gaps(&self, scope: &Path) -> Result<(Vec<Edge>, Option<String>)> {
         let mut args = vec!["graph", ".", "--format", "json"];
         if self.recursive { args.push("--recursive"); }
         let out = std::process::Command::new(&self.binary)
             .args(&args)
             .current_dir(scope)
             .output()?;
-        if !out.status.success() {
-            anyhow::bail!("bilinker graph falló: {}", String::from_utf8_lossy(&out.stderr));
-        }
-        Ok(serde_json::from_slice(&out.stdout)?)
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        let gap = match out.status.code() {
+            Some(0) => None,
+            Some(3) => Some(stderr),
+            _ => anyhow::bail!("bilinker graph falló: {stderr}"),
+        };
+        Ok((serde_json::from_slice(&out.stdout)?, gap))
     }
 }
 
@@ -543,8 +562,17 @@ impl Registry {
         for p in &self.providers {
             let av = p.available(scope);
             if av.is_available() {
-                match p.edges(scope) {
-                    Ok(mut e) => edges.append(&mut e),
+                match p.edges_with_gaps(scope) {
+                    Ok((mut e, gap)) => {
+                        edges.append(&mut e);
+                        if let Some(reason) = gap {
+                            status.push(ProviderStatus {
+                                name: p.name().into(),
+                                status: Availability::Degraded { reason },
+                            });
+                            continue;
+                        }
+                    }
                     Err(err)  => {
                         status.push(ProviderStatus {
                             name: p.name().into(),
@@ -619,6 +647,56 @@ mod tests {
         let edges: Vec<Edge> = serde_json::from_str(json).unwrap();
         assert_eq!(edges[0].declaration_of(&edges[0].to), Some((106, 262)));
         assert_eq!(edges[0].declaration_of(&edges[0].from), None);
+    }
+
+    /// Un `bilinker` falso: imprime `stdout`, `stderr`, y sale con `code`.
+    #[cfg(unix)]
+    fn fake_bilinker(dir: &Path, stdout: &str, stderr: &str, code: i32) -> BilinkProvider {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::create_dir_all(dir.join(".bilink")).unwrap();
+        let bin = dir.join("bilinker");
+        std::fs::write(&bin, format!(
+            "#!/bin/sh\n[ \"$1\" = --version ] && exit 0\ncat <<'EOF'\n{stdout}\nEOF\ncat >&2 <<'EOF'\n{stderr}\nEOF\nexit {code}\n")).unwrap();
+        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        BilinkProvider { binary: bin.display().to_string(), recursive: false }
+    }
+
+    #[cfg(unix)]
+    const ONE_EDGE: &str = r#"[{"from":".::a.md#0~1","to":".::b.rs#0~1","kind":"bilink","guarantee":"accepted","provider":"bilinker","directed":false,"ref":"u","state":["OK","OK"],"commit":["a","b"]}]"#;
+
+    #[cfg(unix)]
+    #[test]
+    fn a_graph_that_exits_with_three_leaves_bilink_degraded_with_its_edges() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = fake_bilinker(dir.path(), ONE_EDGE,
+            "1 bilink(s) sin rango en la cache no emiten arista.\n  Correr `bilinker check .` para calcularlos.", 3);
+        let (edges, status) = Registry::new().register(Box::new(p)).collect(dir.path());
+
+        assert_eq!(edges.len(), 1, "las aristas que salieron se componen");
+        let Availability::Degraded { reason } = &status[0].status else {
+            panic!("incompleto no es completo: {:?}", status[0].status);
+        };
+        assert!(reason.contains("bilinker check"), "la razón es la de bilinker: {reason}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_graph_that_exits_with_one_leaves_bilink_unavailable() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = fake_bilinker(dir.path(), "", "no edges to export for '.'", 1);
+        let (edges, status) = Registry::new().register(Box::new(p)).collect(dir.path());
+        assert!(edges.is_empty());
+        assert!(matches!(status[0].status, Availability::Unavailable { .. }), "{:?}", status[0].status);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_graph_that_exits_with_zero_leaves_bilink_available() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = fake_bilinker(dir.path(), ONE_EDGE, "", 0);
+        let (edges, status) = Registry::new().register(Box::new(p)).collect(dir.path());
+        assert_eq!(edges.len(), 1);
+        assert_eq!(status[0].status, Availability::Available);
     }
 
     #[test]
