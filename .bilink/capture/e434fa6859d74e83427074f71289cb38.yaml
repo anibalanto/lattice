@@ -1,0 +1,6 @@
+file: docs/specs/concepts/node.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "La contención"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "Un nodo con declaración contiene además lo que cae adentro de ella"))) @target)
