@@ -1,0 +1,6 @@
+file: docs/specs/concepts/provider.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "Los tres proveedores"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "Un `graph` que sale con 3 deja a `bilink` `Degraded`"))) @target)
