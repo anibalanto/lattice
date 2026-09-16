@@ -1,0 +1,6 @@
+file: docs/decisions/2026-09-16.vecindario-en-lattice.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "Decisión"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "8. Lattice gana `mentions`, y el impacto que sube por los llamadores"))) @target)
