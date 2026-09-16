@@ -33,6 +33,10 @@ Un proveedor que falla a mitad de un traversal deja un grafo incompleto que ya s
 
 `Degraded` no es un matiz cosmético: separa "puedo pedirle aristas" de "lo que devuelve alcanza para afirmar que no hay más". El caso que lo motiva es el daemon recién arrancado: responde al ping enseguida, pero el language server detrás sigue indexando, así que `callers` devuelve vacío. Reportarlo como `Available` haría pasar "todavía no sé" por "no hay llamadas", que es la confusión más cara que puede cometer este subsistema.
 
+### Un proveedor que contesta incompleto lo dice junto con sus aristas
+
+`available()` no siempre puede saber de antemano si lo que va a devolver está completo. Un proveedor que lo descubre al contestar entrega sus aristas junto con la razón, y queda `Degraded` con esa razón: las aristas se componen, y el grafo no se afirma completo.
+
 ### Un proveedor `Degraded` cuenta como grafo incompleto a los efectos del código de salida
 
 A un proveedor `Degraded` se le piden aristas, igual que a uno `Available`. Lo que no se afirma es que el grafo esté completo: el código de salida lo dice.
@@ -52,6 +56,10 @@ Bilinker entrega los nodos en forma canónica, con los paths Stratum resueltos a
 Que `--recursive` se delegue en bilinker, en vez de que lattice recorra `.stratum/`, es la misma línea: dónde vive una capa es conocimiento de Stratum y del formato bilink, no del grafo agregado.
 
 Está `Unavailable` cuando la capa no tiene `.bilink/` o cuando el ejecutable `bilinker` no se encuentra.
+
+### Un `graph` que sale con 3 deja a `bilink` `Degraded`
+
+`bilinker graph` sale con 3 cuando emite aristas y algún bilink se quedó afuera por no tener rango en la cache, como uno aceptado después del último `check`. El proveedor compone las aristas que salieron y queda `Degraded`, con lo que bilinker dijo por stderr como razón. Cualquier otra salida distinta de 0, como la de una capa sin ningún rango, es una falla, y el proveedor queda `Unavailable`.
 
 ### `state` y `commit` los recibe en la arista y no los calcula
 
@@ -123,7 +131,7 @@ El de documentar la sintaxis es el más probable: es lo que pasa cuando una spec
 4. Emitir las aristas junto con el estado de cada proveedor, disponible o no.
 ```
 
-Un proveedor cuyo `edges` falla queda `Unavailable` con el error como razón. Un consumidor no debería tener que inferir la completitud del grafo a partir de su contenido.
+Un proveedor cuyo `edges` falla queda `Unavailable` con el error como razón, y uno que contesta incompleto queda `Degraded` con la suya. Un consumidor no debería tener que inferir la completitud del grafo a partir de su contenido.
 
 La expansión con `edges_from` viene después, durante el traversal, sobre los nodos de partida ([graph.md](graph.md)).
 
