@@ -7,13 +7,13 @@ Un nodo es un fragmento direccionable del proyecto. Todos los proveedores emiten
 ### Todo nodo tiene forma canónica
 
 ```
-<layer-root>::<path>#<start>~<end>    fragmento (rango de bytes)
-<layer-root>::<path>                   archivo completo
-issue:<id>                             ítem del tracker
-<uri>                                  recurso externo
+<layer-root>::<path>#<start>~<end>[,<start>~<end>…]    fragmento (uno o más tramos de bytes)
+<layer-root>::<path>                                    archivo completo
+issue:<id>                                              ítem del tracker
+<uri>                                                   recurso externo
 ```
 
-`<layer-root>` es la ruta de la capa relativa a la raíz del proyecto (`.` para la capa raíz, `.stratum/impl`, …). `<path>` es relativo a la raíz de esa capa. Los offsets son bytes absolutos dentro del archivo, con la misma semántica que el rango de un capture de bilinker.
+`<layer-root>` es la ruta de la capa relativa a la raíz del proyecto (`.` para la capa raíz, `.stratum/impl`, …). `<path>` es relativo a la raíz de esa capa. Los offsets son bytes absolutos dentro del archivo, con la misma semántica que el rango de un capture de bilinker. Un fragmento de varias partes, como un capture `spring-controller`, lleva un tramo por parte, en orden de archivo: `#1847~1876,2114~2140,2149~2192,2218~2676`. El texto entre dos tramos no es del fragmento.
 
 No hay nodos anónimos ni identificados por objeto.
 
@@ -34,16 +34,28 @@ Es la operación central del subsistema, porque es la que permite cruzar de una 
 ### La contención la calcula lattice, nunca un proveedor
 
 ```
-contiene(a, b)  ⟺  a.layer == b.layer  ∧  a.path == b.path  ∧  a.start ≤ b.start  ∧  b.end ≤ a.end
+contiene(a, b)  ⟺  a.layer == b.layer  ∧  a.path == b.path
+                    ∧  ∀ tb ∈ b.tramos  ∃ ta ∈ a.tramos:  ta.start ≤ tb.start  ∧  tb.end ≤ ta.end
 ```
 
-Lattice la calcula a partir de los rangos que recibe; ningún proveedor la emite, y no es una arista.
+Lattice la calcula a partir de los tramos que recibe; ningún proveedor la emite, y no es una arista. Se calcula sobre cada tramo, no sobre el rango del primero al último: un punto entre dos tramos no está contenido. Todos los endpoints de un controller empiezan en la misma anotación de la clase, así que el rango del primero al último los anidaría a todos.
+
+### Un nodo con declaración contiene además lo que cae adentro de ella
+
+```
+contiene(a, b)  ⟸  a.layer == b.layer  ∧  a.path == b.path
+                    ∧  ∀ tb ∈ b.tramos:  a.declaración.start ≤ tb.start  ∧  tb.end ≤ a.declaración.end
+```
+
+La declaración es un tramo que el proveedor manda junto al nodo: el del nodo que declara lo que el fragmento nombra. Bilinker la manda para un fragmento de varias partes, y en un `spring-controller` es el método entero, con su cuerpo. No es parte de la identidad del nodo, que sigue siendo su forma canónica.
+
+Es lo que decide qué contiene a una llamada que cae en el cuerpo de un método cuya captura es sólo la firma: la contiene el bilink de ese método, por su declaración, y ningún otro. Lo mismo el punto con que el LSP nombra al método, al comienzo de la línea de su nombre, que cae entre dos partes porque el nombre no se captura. La anotación de la clase, que comparten todos los endpoints del archivo, queda fuera de cada declaración, y un punto entre ella y el método no está contenido.
 
 ### La contención se define sobre bytes, no sobre líneas
 
 Un consumidor que parte de una posición del LSP, que trabaja en líneas y columnas, convierte a byte antes de consultar. La conversión correcta es posición → byte, no rango → línea: comparar contra el byte inicial de la línea da falsos positivos cuando dos fragmentos comparten línea, y falsos negativos con rangos que empiezan a mitad de línea.
 
-Un nodo cubre una posición cuando su rango la contiene, con el fin exclusivo: `#10~20` cubre el byte 19 y no el 20.
+Un nodo cubre una posición cuando alguno de sus tramos o su declaración la contiene, con el fin exclusivo: `#10~20` cubre el byte 19 y no el 20.
 
 ### `cubriendo(pos)` devuelve los nodos ordenados de más específico a más general
 
@@ -52,7 +64,7 @@ cubriendo(<layer>::<path>#<pos>)  →  nodos cuyo rango contiene esa posición,
                                       del más específico al más general
 ```
 
-El orden importa: si dos bilinks cubren la misma posición, el consumidor casi siempre quiere el más ajustado.
+El orden importa: si dos bilinks cubren la misma posición, el consumidor casi siempre quiere el más ajustado. Lo que se mide es el largo de lo que cubre la posición: el tramo que la contiene o, si ninguno, la declaración.
 
 ## Los nodos sin rango
 
