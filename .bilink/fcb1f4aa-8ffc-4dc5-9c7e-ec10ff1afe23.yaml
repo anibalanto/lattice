@@ -11,6 +11,7 @@ endpoint:
     accepted:
     - agree:
       - Anibal
+      - anibal
       link: capture ec7cd075272036016b3f9a01cd0a9feb
       hash: 1295deb42eef72026bbc691874be693eafc0efd84bc19599d36263c955abaab3
       hash_ast: fdfe0ab60f0bfa84996f752dcff6a53bc4133912727c251bb003d63d81602102
