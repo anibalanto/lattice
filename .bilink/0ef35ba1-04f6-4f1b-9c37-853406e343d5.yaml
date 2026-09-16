@@ -4,6 +4,7 @@ endpoint:
     accepted:
     - agree:
       - Anibal
+      - anibal
       link: capture 5423a505029a6595d827b38944e30157
       hash: c1246e7f3f74ff5b43112570405e252db4554ff7137c681775d36303f1c8f8f8
   1:
