@@ -1,0 +1,6 @@
+file: docs/specs/concepts/graph.md
+query: |-
+  (section
+    (atx_heading (inline) @n0 (#eq? @n0 "Las dos maneras de recorrer"))
+    (section
+    (atx_heading (inline) @n1 (#eq? @n1 "Con `--cross`, el recorrido cruza lo documentado y sigue del otro lado"))) @target)
