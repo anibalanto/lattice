@@ -31,9 +31,12 @@ enum Command {
         /// Ambos sentidos (default)
         #[arg(long)]
         both: bool,
-        /// Profundidad máxima del traversal
+        /// Profundidad máxima del traversal. Con --cross, 6 si no se pide otra
         #[arg(long)]
         depth: Option<usize>,
+        /// Recorrido de impacto: expande el call graph en cada nodo y cruza las aristas accepted
+        #[arg(long)]
+        cross: bool,
         /// Recolectar también desde las capas descendientes
         #[arg(long)]
         recursive: bool,
@@ -84,11 +87,11 @@ fn main() -> anyhow::Result<()> {
     let cwd = std::env::current_dir()?;
 
     match cli.command {
-        Command::Graph { selector, up, down, both, depth, recursive, via, guarantee, state, format } => {
+        Command::Graph { selector, up, down, both, depth, cross, recursive, via, guarantee, state, format } => {
             let direction = if up { Direction::Up }
                        else if down { Direction::Down }
                        else { let _ = both; Direction::Both };
-            cmd_graph(&cwd, &selector, direction, depth, recursive, via.as_deref(),
+            cmd_graph(&cwd, &selector, direction, depth, cross, recursive, via.as_deref(),
                       guarantee.as_deref(), state.as_deref(), &format)
         }
 
@@ -164,7 +167,7 @@ fn line_col_to_byte(source: &str, line: usize, col: usize) -> usize {
 #[allow(clippy::too_many_arguments)]
 fn cmd_graph(
     cwd: &Path, selector: &str,
-    direction: Direction, depth: Option<usize>, recursive: bool,
+    direction: Direction, depth: Option<usize>, cross: bool, recursive: bool,
     via: Option<&str>, guarantee: Option<&str>, state: Option<&str>,
     format: &str,
 ) -> anyhow::Result<()> {
@@ -176,24 +179,21 @@ fn cmd_graph(
 
     // Los filtros se aplican después de componer, no antes: el estado de los
     // proveedores tiene que reflejar el grafo completo que se pudo ver.
-    if let Some(kinds) = via {
-        let allowed: Vec<&str> = kinds.split(',').map(str::trim).collect();
-        edges.retain(|e| allowed.contains(&e.kind.as_str()));
-    }
-    if let Some(g) = guarantee {
-        let min = Guarantee::parse(g)
-            .ok_or_else(|| anyhow::anyhow!("garantía desconocida: '{g}'"))?;
-        edges.retain(|e| e.guarantee >= min);
-    }
-    if let Some(f) = state {
-        edges.retain(|e| match &e.state {
-            None => false,
-            Some([a, b]) => match f {
-                "non-ok" => a != "OK" || b != "OK",
-                other    => a == other || b == other,
-            },
-        });
-    }
+    let min = guarantee.map(|g| Guarantee::parse(g)
+        .ok_or_else(|| anyhow::anyhow!("garantía desconocida: '{g}'"))).transpose()?;
+    let allowed: Option<Vec<&str>> = via.map(|kinds| kinds.split(',').map(str::trim).collect());
+    let keep = |e: &lattice::model::Edge| {
+        allowed.as_ref().is_none_or(|a| a.contains(&e.kind.as_str()))
+            && min.is_none_or(|m| e.guarantee >= m)
+            && state.is_none_or(|f| match &e.state {
+                None => false,
+                Some([a, b]) => match f {
+                    "non-ok" => a != "OK" || b != "OK",
+                    other    => a == other || b == other,
+                },
+            })
+    };
+    edges.retain(|e| keep(e));
     // El traversal va después de los filtros: `--via` y `--guarantee` definen
     // por qué aristas se puede caminar, no solo cuáles se muestran.
     let graph  = Graph::new(edges, status);
@@ -202,6 +202,17 @@ fn cmd_graph(
     let (graph, mut edges) = match starts {
         // `.` y `*` no recorren: piden el grafo entero de la capa.
         None => { let all = graph.edges.clone(); (graph, all) }
+        // El recorrido de impacto expande en cada nodo, así que las aristas del
+        // LSP llegan durante el recorrido y pasan por los mismos filtros.
+        Some(starts) if cross => {
+            let mut graph = graph;
+            let opts = TraverseOpts { direction, depth: depth.or(Some(6)), stop_at_accepted: false };
+            let reached = graph.traverse_crossing(&starts, &opts, |n| {
+                registry.expand(cwd, n).into_iter().filter(|e| keep(e)).collect()
+            });
+            let reached = reached.into_iter().map(|i| graph.edges[i].clone()).collect();
+            (graph, reached)
+        }
         Some(starts) => {
             // Los proveedores que expanden bajo demanda —el LSP— aportan sus
             // aristas antes de recorrer: si no, el traversal solo vería lo que
