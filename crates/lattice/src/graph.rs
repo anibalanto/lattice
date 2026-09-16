@@ -39,16 +39,21 @@ pub struct Graph {
     pub providers: Vec<ProviderStatus>,
     /// nodo → índices de aristas incidentes
     incident: HashMap<NodeId, Vec<usize>>,
+    /// nodo → la declaración que mandó su proveedor
+    declarations: HashMap<NodeId, (usize, usize)>,
 }
 
 impl Graph {
     pub fn new(edges: Vec<Edge>, providers: Vec<ProviderStatus>) -> Self {
         let mut incident: HashMap<NodeId, Vec<usize>> = HashMap::new();
+        let mut declarations = HashMap::new();
         for (i, e) in edges.iter().enumerate() {
-            incident.entry(e.from.clone()).or_default().push(i);
-            incident.entry(e.to.clone()).or_default().push(i);
+            for n in [&e.from, &e.to] {
+                incident.entry(n.clone()).or_default().push(i);
+                if let Some(d) = e.declaration_of(n) { declarations.insert(n.clone(), d); }
+            }
         }
-        Self { edges, providers, incident }
+        Self { edges, providers, incident, declarations }
     }
 
     pub fn nodes(&self) -> BTreeSet<&NodeId> {
@@ -59,12 +64,21 @@ impl Graph {
     ///
     /// El orden importa: si dos bilinks cubren la misma posición, quien pregunta
     /// casi siempre quiere el más ajustado.
+    ///
+    /// Un nodo la cubre por un tramo o por su declaración, y se ordena por el largo
+    /// de lo que la cubre.
     pub fn covering(&self, layer: &str, path: &str, pos: usize) -> Vec<&NodeId> {
-        let mut hits: Vec<&NodeId> = self.incident.keys()
-            .filter(|n| n.covers(layer, path, pos))
+        let mut hits: Vec<(&NodeId, usize)> = self.incident.keys()
+            .filter_map(|n| n.covering_len(layer, path, pos, self.declarations.get(n).copied())
+                .map(|len| (n, len)))
             .collect();
-        hits.sort_by_key(|n| n.span().unwrap_or(usize::MAX));
-        hits
+        hits.sort_by(|a, b| a.1.cmp(&b.1).then(a.0.cmp(b.0)));
+        hits.into_iter().map(|(n, _)| n).collect()
+    }
+
+    /// ¿`a` contiene a `b`, por sus tramos o por su declaración?
+    pub fn contains(&self, a: &NodeId, b: &NodeId) -> bool {
+        a.contains(b) || self.declarations.get(a).is_some_and(|&d| a.contains_within(d, b))
     }
 
     /// Nodos relacionados por contención con `n`, en cualquier sentido.
@@ -73,7 +87,7 @@ impl Graph {
     /// y descubrir que hay un endpoint `accepted` que la contiene.
     pub fn related_by_containment(&self, n: &NodeId) -> Vec<&NodeId> {
         self.incident.keys()
-            .filter(|m| *m != n && (m.contains(n) || n.contains(m)))
+            .filter(|m| *m != n && (self.contains(m, n) || self.contains(n, m)))
             .collect()
     }
 
@@ -148,7 +162,7 @@ mod tests {
         Edge {
             from: n(from), to: n(to), kind: kind.into(), guarantee: g,
             provider: "t".into(), directed, r#ref: format!("{from}->{to}"),
-            state: None, commit: None, broken: false,
+            state: None, commit: None, broken: false, declaration: None,
         }
     }
 
@@ -156,6 +170,69 @@ mod tests {
         Graph::new(edges, vec![ProviderStatus {
             name: "t".into(), status: Availability::Available,
         }])
+    }
+
+    fn with_declaration(mut e: Edge, to: &str) -> Edge {
+        e.declaration = Some([None, Some(to.into())]);
+        e
+    }
+
+    /// Tres endpoints de un controller: la ruta de la clase en `10~30`, y cada
+    /// método con sus partes y su declaración.
+    fn controller() -> Graph {
+        graph(vec![
+            with_declaration(edge(".::front.ts#0~50",   ".::C.java#10~30,100~120,140~160", "bilink", Guarantee::Accepted, false), "95~260"),
+            with_declaration(edge(".::front.ts#60~90",  ".::C.java#10~30,300~320,340~360", "bilink", Guarantee::Accepted, false), "295~460"),
+            with_declaration(edge(".::front.ts#95~120", ".::C.java#10~30,500~520,540~560", "bilink", Guarantee::Accepted, false), "495~660"),
+        ])
+    }
+
+    #[test]
+    fn from_one_endpoint_the_others_of_the_controller_are_not_reached() {
+        let g = controller();
+        let reached = g.traverse(&[n(".::front.ts#0~50"), n(".::C.java#10~30,100~120,140~160")],
+                                 &TraverseOpts::default());
+        let refs: Vec<&str> = reached.iter().map(|&i| g.edges[i].r#ref.as_str()).collect();
+        assert_eq!(refs, vec![".::front.ts#0~50->.::C.java#10~30,100~120,140~160"],
+                   "compartir la ruta de la clase no es contenerse");
+    }
+
+    #[test]
+    fn a_call_on_the_name_line_reaches_only_the_endpoint_of_its_method() {
+        let mut edges = controller().edges;
+        // El LSP nombra al método por el comienzo de la línea de su nombre, entre dos partes.
+        edges.push(edge(".::C.java#330~330", ".::Service.java#0~0", "call", Guarantee::Derived, true));
+        let g = graph(edges);
+
+        let reached = g.traverse(&[n(".::Service.java#0~0")], &TraverseOpts {
+            direction: Direction::Up, ..Default::default()
+        });
+        let bilinks: Vec<&str> = reached.iter().map(|&i| &g.edges[i])
+            .filter(|e| e.kind == "bilink").map(|e| e.to.0.as_str()).collect();
+        assert_eq!(bilinks, vec![".::C.java#10~30,300~320,340~360"]);
+    }
+
+    #[test]
+    fn covering_a_body_line_finds_the_endpoint_of_its_method() {
+        let g = controller();
+        let hits: Vec<&str> = g.covering(".", "C.java", 400).iter().map(|n| n.0.as_str()).collect();
+        assert_eq!(hits, vec![".::C.java#10~30,300~320,340~360"]);
+        assert!(g.covering(".", "C.java", 50).is_empty(), "entre la clase y el primer método no hay nadie");
+        assert_eq!(g.covering(".", "C.java", 20).len(), 3, "la ruta de la clase es de los tres");
+    }
+
+    #[test]
+    fn a_span_is_more_specific_than_a_declaration() {
+        let g = graph(vec![
+            with_declaration(edge(".::x#0~1", ".::C.java#100~120,140~160", "bilink", Guarantee::Accepted, false), "95~260"),
+            edge(".::y#0~1", ".::C.java#130~200", "bilink", Guarantee::Accepted, false),
+        ]);
+        let hits: Vec<&str> = g.covering(".", "C.java", 145).iter().map(|n| n.0.as_str()).collect();
+        assert_eq!(hits, vec![".::C.java#100~120,140~160", ".::C.java#130~200"],
+                   "lo cubre el tramo 140~160, más corto que 130~200");
+        let hits: Vec<&str> = g.covering(".", "C.java", 135).iter().map(|n| n.0.as_str()).collect();
+        assert_eq!(hits, vec![".::C.java#130~200", ".::C.java#100~120,140~160"],
+                   "y a 135, entre las partes, lo cubre la declaración, más larga");
     }
 
     #[test]
