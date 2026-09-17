@@ -649,6 +649,13 @@ mod tests {
         assert_eq!(edges[0].declaration_of(&edges[0].from), None);
     }
 
+    /// Los tests que ejecutan un `bilinker` falso van de a uno.
+    ///
+    /// Un proceso que otro test lanza mientras el script sigue abierto para
+    /// escritura hereda ese descriptor, y ejecutarlo falla con "Text file busy".
+    #[cfg(unix)]
+    static FAKE_BILINKER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     /// Un `bilinker` falso: imprime `stdout`, `stderr`, y sale con `code`.
     #[cfg(unix)]
     fn fake_bilinker(dir: &Path, stdout: &str, stderr: &str, code: i32) -> BilinkProvider {
@@ -667,6 +674,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn a_graph_that_exits_with_three_leaves_bilink_degraded_with_its_edges() {
+        let _serial = FAKE_BILINKER.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         let p = fake_bilinker(dir.path(), ONE_EDGE,
             "1 bilink(s) sin rango en la cache no emiten arista.\n  Correr `bilinker check .` para calcularlos.", 3);
@@ -682,6 +690,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn a_graph_that_exits_with_one_leaves_bilink_unavailable() {
+        let _serial = FAKE_BILINKER.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         let p = fake_bilinker(dir.path(), "", "no edges to export for '.'", 1);
         let (edges, status) = Registry::new().register(Box::new(p)).collect(dir.path());
@@ -692,6 +701,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn a_graph_that_exits_with_zero_leaves_bilink_available() {
+        let _serial = FAKE_BILINKER.lock().unwrap_or_else(|e| e.into_inner());
         let dir = tempfile::tempdir().unwrap();
         let p = fake_bilinker(dir.path(), ONE_EDGE, "", 0);
         let (edges, status) = Registry::new().register(Box::new(p)).collect(dir.path());
